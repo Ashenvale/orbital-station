@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#02030a" />
+    <title>Orbital Station — Prototipo</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        background: #02030a;
+        overflow: hidden;
+        overscroll-behavior: none;
+        touch-action: none;
+        font-family: "Courier New", ui-monospace, monospace;
+      }
+      /* El contenedor ocupa TODO el viewport; Phaser (Scale.FIT + CENTER_BOTH)
+         centra el canvas dentro con barras a los lados. Sin flexbox para que
+         el auto-centrado de Phaser no entre en conflicto. */
+      #game {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+      }
+      #game canvas {
+        display: block;
+        margin: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
