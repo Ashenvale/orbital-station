@@ -107,6 +107,13 @@ export default class GameScene extends Phaser.Scene {
     this.up = newUpgState();
     this.up.cannon.owned = true; // el cañón base dispara desde el segundo 0
     this.bossCount = parseInt(localStorage.getItem('os_bosses') || '0', 10) || 0;
+    // QA: ?dev=1 (localStorage 'os_dev') = TODAS las armas activas y el draft
+    // ofrece TODAS las cartas para probar cómo funcionan.
+    this.dev = localStorage.getItem('os_dev') === '1';
+    if (this.dev) {
+      this.bossCount = 99; // desbloquea railgun/drone/agujero negro
+      for (const wid of WEAPON_IDS) this.up[wid].owned = true;
+    }
 
     // -- Módulos permanentes de la nave (comprados con oro) -----------------
     this.abilRateMul = shipAtkSpdMul(Economy.powerLevel('sh_atkspd'));
@@ -1867,25 +1874,7 @@ export default class GameScene extends Phaser.Scene {
       pool = pool.filter((c) => occupiesSlot(c.wid, this.up));
     }
 
-    // Selección ponderada de hasta 3 cartas distintas.
-    const picks = [];
-    const bag = pool.slice();
-    while (picks.length < 3 && bag.length) {
-      let total = 0;
-      for (const c of bag) total += c.weight;
-      let r = Math.random() * total;
-      let idx = 0;
-      for (let i = 0; i < bag.length; i++) {
-        r -= bag[i].weight;
-        if (r <= 0) {
-          idx = i;
-          break;
-        }
-      }
-      picks.push(bag.splice(idx, 1)[0]);
-    }
-
-    const choices = picks.map((p) => {
+    const mkChoice = (p) => {
       const m = cardMeta(p.wid, p.kind, p.id);
       const stacks = p.kind === 'common' ? (this.up[p.wid].commons[p.id] || 0) : 0;
       const max = p.kind === 'common' ? WEAPONS[p.wid].commons.find((c) => c.id === p.id).max : 0;
@@ -1906,13 +1895,60 @@ export default class GameScene extends Phaser.Scene {
             ? `${m.title} ${stacks + 1}/${max}`
             : p.kind === 'special'
               ? m.title
-              : '', // 'unlock': el badge ya dice NUEVA; no repetir el nombre
-
+              : '',
         level: p.kind === 'common' ? stacks + 1 : 0,
         pips: false,
         desc: m.desc
       };
-    });
+    };
+
+    // QA dev: ofrece TODAS las cartas elegibles (sin hitos/cap/pesos).
+    if (this.dev) {
+      const all = [];
+      for (const wid of WEAPON_IDS) {
+        const W = WEAPONS[wid];
+        const s = this.up[wid];
+        if (!s.owned) all.push({ wid, kind: 'unlock', id: 'base' });
+        for (const c of W.commons)
+          if ((s.commons[c.id] || 0) < c.max) all.push({ wid, kind: 'common', id: c.id });
+        for (const sp of W.specials)
+          if (!s.specials.includes(sp.id)) all.push({ wid, kind: 'special', id: sp.id });
+      }
+      const choices = all.map(mkChoice);
+      choices.push({
+        id: '__repair',
+        name: t('ui.repair_name'),
+        color: 0x9affc4,
+        icon: null,
+        badge: null,
+        levelLabel: t('ui.tag_support'),
+        level: 0,
+        pips: false,
+        desc: t('ui.repair_desc', { n: Math.round(this.maxHp * 0.25) })
+      });
+      this.events.emit('levelup', { choices, level: this.level, dev: true });
+      return;
+    }
+
+    // Selección ponderada de hasta 3 cartas distintas.
+    const picks = [];
+    const bag = pool.slice();
+    while (picks.length < 3 && bag.length) {
+      let total = 0;
+      for (const c of bag) total += c.weight;
+      let r = Math.random() * total;
+      let idx = 0;
+      for (let i = 0; i < bag.length; i++) {
+        r -= bag[i].weight;
+        if (r <= 0) {
+          idx = i;
+          break;
+        }
+      }
+      picks.push(bag.splice(idx, 1)[0]);
+    }
+
+    const choices = picks.map(mkChoice);
 
     // Relleno con "Reparar" si no hubo 3 cartas.
     while (choices.length < 3) {

@@ -365,7 +365,8 @@ export default class UIScene extends Phaser.Scene {
   // ===========================================================================
   //  DRAFT (subir de nivel) — usa la card sci-fi compartida
   // ===========================================================================
-  showDraft({ choices, level }) {
+  showDraft({ choices, level, dev }) {
+    if (dev) return this.showDraftDev(choices, level);
     this.draftLayer.removeAll(true);
     this.draftLayer.setVisible(true);
 
@@ -465,6 +466,101 @@ export default class UIScene extends Phaser.Scene {
     });
 
     this.tutOnDraft(); // coach contextual (solo 1ª vez, tutorial)
+  }
+
+  // QA dev: TODAS las cartas en una grilla scrolleable (elegí cualquiera).
+  showDraftDev(choices, level) {
+    if (this._devScrollOff) this._devScrollOff(); // limpia listeners previos
+    this.draftLayer.removeAll(true);
+    this.draftLayer.setVisible(true);
+    this.draftLayer.add(this.add.rectangle(0, 0, GAME_W, GAME_H, 0x10081f, 0.95).setOrigin(0, 0));
+    this.draftLayer.add(
+      this.add
+        .text(GAME_W / 2, 34, `DEV · LEVEL ${level} — elegí cualquiera`, {
+          fontFamily: FONT,
+          fontSize: '20px',
+          color: '#ffe640',
+          fontStyle: 'bold'
+        })
+        .setOrigin(0.5)
+    );
+
+    const margin = 14;
+    const gap = 10;
+    const cols = 3;
+    const tileW = (GAME_W - margin * 2 - gap * (cols - 1)) / cols;
+    const tileH = 132;
+    const listTop = 62;
+    const listH = GAME_H - listTop - 16;
+
+    const grid = this.add.container(0, listTop);
+    this.draftLayer.add(grid);
+    const maskG = this.add.graphics().setVisible(false);
+    maskG.fillRect(0, listTop, GAME_W, listH);
+    grid.setMask(maskG.createGeometryMask());
+
+    choices.forEach((c, i) => {
+      grid.add(
+        buildTile(this, {
+          cx: margin + tileW / 2 + (i % cols) * (tileW + gap),
+          cy: tileH / 2 + Math.floor(i / cols) * (tileH + gap),
+          w: tileW,
+          h: tileH,
+          color: c.color,
+          name: c.name,
+          icon: c.icon || c.id,
+          compact: true,
+          footer:
+            c.badge && c.levelLabel
+              ? `${c.badge} · ${c.levelLabel}`
+              : c.badge || c.levelLabel || '',
+          footerColor: '#cfeefb',
+          onClick: () => {
+            this.tweens.killAll();
+            if (this._devScrollOff) this._devScrollOff();
+            this.draftLayer.setVisible(false);
+            this.draftLayer.removeAll(true);
+            this.gs.chooseDraft(c.id);
+          }
+        })
+      );
+    });
+
+    const rows = Math.ceil(choices.length / cols);
+    const totalH = rows * tileH + (rows - 1) * gap + 10;
+    let scrollY = 0;
+    let drag = false;
+    let lastY = 0;
+    const minScroll = Math.min(0, listH - totalH);
+    const apply = (d) => {
+      scrollY = Phaser.Math.Clamp(scrollY + d, minScroll, 0);
+      grid.y = listTop + scrollY;
+    };
+    const onWheel = (p, go, dx, dy) => apply(-dy);
+    const onDown = (p) => {
+      if (p.y > listTop) {
+        drag = true;
+        lastY = p.y;
+      }
+    };
+    const onMove = (p) => {
+      if (drag && p.isDown) {
+        apply(p.y - lastY);
+        lastY = p.y;
+      }
+    };
+    const onUp = () => (drag = false);
+    this.input.on('wheel', onWheel);
+    this.input.on('pointerdown', onDown);
+    this.input.on('pointermove', onMove);
+    this.input.on('pointerup', onUp);
+    this._devScrollOff = () => {
+      this.input.off('wheel', onWheel);
+      this.input.off('pointerdown', onDown);
+      this.input.off('pointermove', onMove);
+      this.input.off('pointerup', onUp);
+      this._devScrollOff = null;
+    };
   }
 
   // Aviso no bloqueante "arma desbloqueada" (lo dispara GameScene una vez).

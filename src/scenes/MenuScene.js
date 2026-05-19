@@ -20,14 +20,19 @@ export default class MenuScene extends Phaser.Scene {
 
   create() {
     Music.stop(); // la música solo suena en los modos de juego
-    // QA: ?tut=1 fuerza la experiencia de "primera vez" (resetea el flag).
-    // ?reset=1 limpia todo el progreso/economía/estrellas guardado.
+    // QA: ?tut=1 fuerza "primera vez". ?reset=1 limpia todo lo guardado.
+    // ?dev=1 = TODAS las armas activas + el draft ofrece TODAS las cartas
+    // (?dev=0 lo apaga). Persiste en localStorage 'os_dev'.
     const q = new URLSearchParams(window.location.search);
     if (q.has('tut')) localStorage.removeItem('os_tut');
+    if (q.has('dev')) {
+      if (q.get('dev') === '0') localStorage.removeItem('os_dev');
+      else localStorage.setItem('os_dev', '1');
+    }
     if (q.has('reset')) {
       [
         'os_tut', 'os_progress', 'os_stars', 'os_gold', 'os_power',
-        'os_bosses', 'os_unlocked_drone', 'os_unlocked_blackhole'
+        'os_bosses', 'os_unlocked_drone', 'os_unlocked_blackhole', 'os_dev'
       ].forEach((k) => localStorage.removeItem(k)
       );
     }
