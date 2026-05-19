@@ -1922,19 +1922,12 @@ export default class GameScene extends Phaser.Scene {
     };
   }
 
-  // Todas las cartas elegibles (modo dev / botón "elegir cuando quiera").
+  // Modo dev: SIMULA el draft real (mismas reglas: arma sin tener => carta
+  // de conseguirla; ya conseguida => su próxima mejora posible según el
+  // estado/hitos), pero mostrando TODAS esas opciones para elegir siempre.
   _devChoices() {
-    const all = [];
-    for (const wid of WEAPON_IDS) {
-      const W = WEAPONS[wid];
-      const s = this.up[wid];
-      if (!s.owned) all.push({ wid, kind: 'unlock', id: 'base' });
-      for (const c of W.commons)
-        if ((s.commons[c.id] || 0) < c.max) all.push({ wid, kind: 'common', id: c.id });
-      for (const sp of W.specials)
-        if (!s.specials.includes(sp.id)) all.push({ wid, kind: 'special', id: sp.id });
-    }
-    const choices = all.map((p) => this._mkChoice(p));
+    const pool = draftPool(this.up, { bossCount: this.bossCount });
+    const choices = pool.map((p) => this._mkChoice(p));
     choices.push(this._repairChoice());
     return choices;
   }
