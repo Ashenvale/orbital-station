@@ -139,6 +139,7 @@ export default class GameScene extends Phaser.Scene {
     this.bullets = this.physics.add.group();
     this.missiles = this.physics.add.group();
     this.orbsGroup = this.physics.add.group();
+    this.bossShots = this.physics.add.group(); // disparos de jefe (destruibles)
     // Pools de FX (Text/Image) reutilizables — evitan GC en cada golpe/muerte.
     this._dnPool = []; // damage numbers
     this._glowPool = []; // glows de muerte / plasma
@@ -155,6 +156,11 @@ export default class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.missiles, this.enemies, this.onMissileHit, null, this);
     this.physics.add.overlap(this.orbsGroup, this.enemies, this.onOrbHit, null, this);
     this.physics.add.overlap(this.station, this.enemies, this.onEnemyReachStation, null, this);
+    // Disparos del jefe: el jugador puede destruirlos; si llegan, dañan.
+    this.physics.add.overlap(this.bullets, this.bossShots, this.onPlayerHitBossShot, null, this);
+    this.physics.add.overlap(this.missiles, this.bossShots, this.onPlayerHitBossShot, null, this);
+    this.physics.add.overlap(this.orbsGroup, this.bossShots, this.onPlayerHitBossShot, null, this);
+    this.physics.add.overlap(this.station, this.bossShots, this.onBossShotStation, null, this);
 
     this.baseWeaponT = 0;
     // Pre-cargado: el primer enemigo aparece en el primer frame (sin espera).
@@ -414,6 +420,7 @@ export default class GameScene extends Phaser.Scene {
       });
     cull(this.bullets);
     cull(this.missiles);
+    cull(this.bossShots);
   }
 
   // ---------------------------------------------------------------------------
@@ -758,39 +765,44 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  // Disparo de jefe: proyectiles telegrafiados hacia la estación.
+  // Disparo de jefe: proyectil FÍSICO destruible. El jugador puede abatirlo
+  // con balas/misiles/orbes; si llega a la estación, la daña.
   bossFire(e, dmg, n, fl) {
     if (this._won || this._winPending) return;
     this.sfx?.play('shoot');
+    const col = (ENEMY_CATALOG[e.enemyType] && ENEMY_CATALOG[e.enemyType].color) || 0xff4f86;
     const base = Math.atan2(CY - e.y, CX - e.x);
+    const speed = 200;
     for (let i = 0; i < n; i++) {
       const off = n > 1 ? (i - (n - 1) / 2) * 0.18 : 0;
       const ang = base + off;
-      const p = this.add
-        .circle(e.x, e.y, 6, 0xff4f86, 1)
-        .setBlendMode(ADD)
-        .setDepth(6);
-      p.setStrokeStyle(2, 0xffffff, 0.8);
-      const tx = e.x + Math.cos(ang) * 900;
-      const ty = e.y + Math.sin(ang) * 900;
-      // Viaja recto; daña la estación si la cruza (no es kamikaze del jefe).
-      const dur = 1100;
-      const tw = this.tweens.add({
-        targets: p,
-        x: tx,
-        y: ty,
-        duration: dur,
-        onUpdate: () => {
-          if (!p.active) return;
-          if (Math.hypot(p.x - CX, p.y - CY) <= STATION.radius + 6) {
-            this.applyStationDamage(dmg);
-            tw.stop();
-            p.destroy();
-          }
-        },
-        onComplete: () => p.active && p.destroy()
-      });
+      const p = this.acquire(this.bossShots, e.x, e.y, 'tex_bullet');
+      p.setBlendMode(ADD).setDepth(6).setScale(1.5).setTint(col);
+      p.damage = dmg;
+      p._dieAt = this.timeSurvived + 6000;
+      p.body.setCircle(5, p.width / 2 - 5, p.height / 2 - 5);
+      p.body.setVelocity(Math.cos(ang) * speed, Math.sin(ang) * speed);
     }
+  }
+
+  // El jugador derriba un disparo del jefe (cuenta como proyectil).
+  onPlayerHitBossShot(proj, shot) {
+    if (!shot.active) return;
+    this.sfx?.play('hit');
+    this.spawnDeathFx(shot.x, shot.y, 0xfff0a0);
+    this.kill(shot);
+    // El proyectil del jugador se consume salvo que perfore.
+    if (proj && proj.active && proj._hit) {
+      if (proj.pierce > 0) proj.pierce--;
+      else this.kill(proj);
+    }
+  }
+
+  onBossShotStation(station, shot) {
+    if (!shot.active) return;
+    this.applyStationDamage(shot.damage);
+    this.spawnDeathFx(shot.x, shot.y, 0xff8a8a);
+    this.kill(shot);
   }
 
   updateEnemies(dt) {
@@ -1044,6 +1056,10 @@ export default class GameScene extends Phaser.Scene {
         }
         this.damageEnemy(e, st.damage, 'elemental');
       }
+    });
+    // La onda también barre disparos de jefe que entren en su radio.
+    this.bossShots.children.iterate((s) => {
+      if (s && s.active && Math.hypot(s.x - CX, s.y - CY) <= radius) this.kill(s);
     });
   }
 
