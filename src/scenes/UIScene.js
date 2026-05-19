@@ -539,9 +539,9 @@ export default class UIScene extends Phaser.Scene {
 
     const margin = 14;
     const gap = 10;
-    const cols = 3;
+    const cols = 2; // 2 col + tile alto = entra la descripción (qué hace)
     const tileW = (GAME_W - margin * 2 - gap * (cols - 1)) / cols;
-    const tileH = 132;
+    const tileH = 196;
     const listTop = 62;
     const listH = GAME_H - listTop - 16;
 
@@ -561,12 +561,12 @@ export default class UIScene extends Phaser.Scene {
           color: c.color,
           name: c.name,
           icon: c.icon || c.id,
-          compact: true,
-          footer:
+          badge:
             c.badge && c.levelLabel
               ? `${c.badge} · ${c.levelLabel}`
-              : c.badge || c.levelLabel || '',
-          footerColor: '#cfeefb',
+              : c.badge || c.levelLabel || null,
+          body: c.desc, // descripción real (qué hace) — para testear bien
+          level: c.pips ? c.level || 0 : null,
           onClick: () => {
             this.tweens.killAll();
             if (this._devScrollOff) this._devScrollOff();
