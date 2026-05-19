@@ -166,8 +166,8 @@ export const WEAPONS = {
   drone: {
     name: { es: 'Drone de Combate', en: 'Combat Drone' },
     blurb: {
-      es: 'Dron errático con vida: embiste enemigos con el cuerpo; al morir explota y reaparece. Disparo = mejora.',
-      en: 'Erratic drone with HP: rams enemies with its body; on death it explodes and respawns. Gun = upgrade.'
+      es: 'Dron errático con vida: embiste enemigos con el cuerpo y reaparece al morir. Disparo y explosión = mejoras.',
+      en: 'Erratic drone with HP: rams enemies with its body and respawns on death. Gun and explosion = upgrades.'
     },
     type: 'kinetic',
     color: 0x9ad0ff,
@@ -181,7 +181,7 @@ export const WEAPONS = {
     ],
     specials: [
       S('gun', 'Cañón de drone', 'Drone gun', 'Además dispara al más cercano.', 'Also shoots the nearest enemy.'),
-      S('bigboom', 'Carga explosiva', 'Heavy charge', 'Explosión final ×2 (radio y daño).', 'Death blast ×2 (radius and damage).'),
+      S('kamikaze', 'Kamikaze', 'Kamikaze', 'Explota (AOE) al morir.', 'Explodes (AOE) on death.'),
       S('phase', 'Munición de fase', 'Phase ammo', 'Disparos pasan a energía (req. Cañón).', 'Shots become energy (needs Gun).')
     ]
   },

@@ -1337,11 +1337,15 @@ export default class GameScene extends Phaser.Scene {
         }
       }
 
-      // Explota al quedarse sin HP y reaparece tras respawnMs.
+      // Muere sin HP y reaparece tras respawnMs. La EXPLOSIÓN (AOE) es la
+      // mejora especial "Kamikaze"; sin ella, muere sin estallar.
       if (d.hp <= 0) {
-        const big = !!st.special.bigboom;
-        this.plasmaField(d.x, d.y, st.damage * (big ? 6 : 3), 'kinetic', big ? 80 : 52);
-        this.sfx?.play('explosion');
+        if (st.special.kamikaze) {
+          this.plasmaField(d.x, d.y, st.damage * 4, 'kinetic', 70);
+          this.sfx?.play('explosion');
+        } else {
+          this.spawnDeathFx(d.x, d.y, 0x9ad0ff);
+        }
         d.dead = true;
         d.respawnAt = now + st.respawnMs;
         d.setVisible(false).setActive(false);
