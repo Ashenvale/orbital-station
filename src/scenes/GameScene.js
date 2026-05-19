@@ -107,12 +107,13 @@ export default class GameScene extends Phaser.Scene {
     this.up = newUpgState();
     this.up.cannon.owned = true; // el cañón base dispara desde el segundo 0
     this.bossCount = parseInt(localStorage.getItem('os_bosses') || '0', 10) || 0;
-    // QA: ?dev=1 (localStorage 'os_dev') = TODAS las armas activas y el draft
-    // ofrece TODAS las cartas para probar cómo funcionan.
-    this.dev = localStorage.getItem('os_dev') === '1';
+    // MODO DEV (su propio modo, NO toca los modos normales): enemigos
+    // infinitos, estación invulnerable, y elegís el arma que quieras cuando
+    // quieras con el botón "✚ ARMA" (sin XP). Se entra con ?dev=1.
+    this.dev = !!data.dev;
     if (this.dev) {
-      this.bossCount = 99; // desbloquea railgun/drone/agujero negro
-      for (const wid of WEAPON_IDS) this.up[wid].owned = true;
+      this.mode = 'endless'; // spawn indefinido
+      this.bossCount = 99; // el selector ofrece TODAS las armas
     }
 
     // -- Módulos permanentes de la nave (comprados con oro) -----------------
@@ -1759,6 +1760,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   applyStationDamage(amount) {
+    if (this.dev) return; // modo DEV: estación invulnerable
     // Nivel ya ganado (o en su "respiro" final): nada de daño/derrota.
     if (this._won || this._winPending) return;
     // ESPECIAL escudo "Absorción": anula el golpe letal + 1s de invulnerable
@@ -1838,6 +1840,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   addXp(amount) {
+    // Modo DEV: no hay XP/draft (las armas se eligen con el botón ✚ ARMA).
+    if (this.dev) return;
     // Partida terminada o en su "respiro" final: no más XP ni subir de nivel
     // (no tiene sentido draftear con el nivel ya ganado/perdido).
     if (this._won || this._winPending) return;
@@ -1922,12 +1926,6 @@ export default class GameScene extends Phaser.Scene {
     this.drafting = true;
     this.running = false;
     this.physics.world.pause();
-
-    // QA dev: ofrece TODAS las cartas elegibles (sin hitos/cap/pesos).
-    if (this.dev) {
-      this.events.emit('levelup', { choices: this._devChoices(), level: this.level, dev: true });
-      return;
-    }
 
     // Pool atómico (motor v0.7). Cada candidato = una carta apilable.
     let pool = draftPool(this.up, { bossCount: this.bossCount });

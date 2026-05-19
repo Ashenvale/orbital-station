@@ -21,20 +21,20 @@ export default class MenuScene extends Phaser.Scene {
   create() {
     Music.stop(); // la música solo suena en los modos de juego
     // QA: ?tut=1 fuerza "primera vez". ?reset=1 limpia todo lo guardado.
-    // ?dev=1 = TODAS las armas activas + el draft ofrece TODAS las cartas
-    // (?dev=0 lo apaga). Persiste en localStorage 'os_dev'.
     const q = new URLSearchParams(window.location.search);
     if (q.has('tut')) localStorage.removeItem('os_tut');
-    if (q.has('dev')) {
-      if (q.get('dev') === '0') localStorage.removeItem('os_dev');
-      else localStorage.setItem('os_dev', '1');
-    }
     if (q.has('reset')) {
       [
         'os_tut', 'os_progress', 'os_stars', 'os_gold', 'os_power',
-        'os_bosses', 'os_unlocked_drone', 'os_unlocked_blackhole', 'os_dev'
+        'os_bosses', 'os_unlocked_drone', 'os_unlocked_blackhole'
       ].forEach((k) => localStorage.removeItem(k)
       );
+    }
+    // MODO DEV: ?dev=1 entra a un modo propio (enemigos infinitos, sin
+    // morir, elegís el arma cuando quieras). No toca los modos normales.
+    if (q.has('dev')) {
+      this.scene.start('GameScene', { dev: true });
+      return;
     }
     // Primera vez de todas: directo al Nivel 1 con tutorial breve.
     if (!localStorage.getItem('os_tut')) {
