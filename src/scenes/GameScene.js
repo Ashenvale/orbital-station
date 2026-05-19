@@ -1297,7 +1297,7 @@ export default class GameScene extends Phaser.Scene {
       d.dead = false;
       d.phase = Math.random() * Math.PI * 2;
       d._gunT = 0;
-      d._hitCd = 0;
+      d._dash = false;
       this.drones.push(d);
     }
     while (this.drones.length > st.count) this.drones.pop().destroy();
@@ -1309,39 +1309,57 @@ export default class GameScene extends Phaser.Scene {
         if (now >= d.respawnAt) {
           d.dead = false;
           d.hp = d.maxHp;
+          d._dash = false;
           d.setVisible(true).setActive(true);
           d.x = CX + Phaser.Math.Between(-40, 40);
           d.y = CY + Phaser.Math.Between(-40, 40);
         }
         continue;
       }
-      // Rumbo hacia el enemigo más cercano + bamboleo errático.
-      const tg = this.nearestEnemyToPoint(d.x, d.y);
-      let ang;
-      if (tg) ang = Math.atan2(tg.y - d.y, tg.x - d.x);
-      else ang = Math.atan2(CY - d.y, CX - d.x);
-      ang += Math.sin(now / 170 + d.phase) * 0.9 + (Math.random() - 0.5) * 0.35;
-      const sp = st.speed;
-      d.x += Math.cos(ang) * sp * (dt / 1000);
-      d.y += Math.sin(ang) * sp * (dt / 1000);
-      if (d.x < M) d.x = M;
-      else if (d.x > GAME_W - M) d.x = GAME_W - M;
-      if (d.y < M) d.y = M;
-      else if (d.y > GAME_H - M) d.y = GAME_H - M;
-      d.rotation += 6 * (dt / 1000);
 
-      // Embestida: daña a un enemigo en contacto y pierde HP.
-      if (now >= d._hitCd) {
-        let hit = null;
+      // Embestida tipo "pasada": elige un enemigo, lo ATRAVIESA rápido y
+      // sale por el otro lado; luego busca otro (puede o no ser el anterior).
+      const DASH_SP = st.speed * 2.6;
+      const OVERSHOOT = 110;
+      if (!d._dash) {
+        const tg = this.nearestEnemyToPoint(d.x, d.y);
+        if (tg) {
+          const a = Math.atan2(tg.y - d.y, tg.x - d.x);
+          d._dx = Math.cos(a);
+          d._dy = Math.sin(a);
+          d._dashLeft = Math.hypot(tg.x - d.x, tg.y - d.y) + OVERSHOOT;
+          d._dashHit = new Set();
+          d._dash = true;
+        } else {
+          // Sin enemigos: deriva suave cerca del centro.
+          const a = Math.atan2(CY - d.y, CX - d.x);
+          d.x += Math.cos(a) * st.speed * 0.4 * (dt / 1000);
+          d.y += Math.sin(a) * st.speed * 0.4 * (dt / 1000);
+          d.rotation += 4 * (dt / 1000);
+        }
+      }
+      if (d._dash) {
+        const step = DASH_SP * (dt / 1000);
+        d.x += d._dx * step;
+        d.y += d._dy * step;
+        d._dashLeft -= step;
+        d.rotation = Math.atan2(d._dy, d._dx) + Math.PI / 2;
+        // Daña (1 vez por pasada) a cada enemigo que atraviesa; pierde HP.
         this.enemies.children.iterate((e) => {
-          if (hit || !e || !e.active || e._untargetable) return;
-          if (Math.hypot(e.x - d.x, e.y - d.y) < 26) hit = e;
+          if (!e || !e.active || e._untargetable || d._dashHit.has(e)) return;
+          if (Math.hypot(e.x - d.x, e.y - d.y) < 26) {
+            d._dashHit.add(e);
+            this.damageEnemy(e, st.damage, 'kinetic');
+            d.hp -= Math.max(2, d.maxHp * 0.15);
+            this.spawnDeathFx(d.x, d.y, 0x9ad0ff);
+          }
         });
-        if (hit) {
-          this.damageEnemy(hit, st.damage, 'kinetic');
-          d.hp -= Math.max(2, d.maxHp * 0.18);
-          d._hitCd = now + 180;
-          this.spawnDeathFx(d.x, d.y, 0x9ad0ff);
+        const out =
+          d.x < M || d.x > GAME_W - M || d.y < M || d.y > GAME_H - M;
+        if (d._dashLeft <= 0 || out) {
+          d.x = Phaser.Math.Clamp(d.x, M, GAME_W - M);
+          d.y = Phaser.Math.Clamp(d.y, M, GAME_H - M);
+          d._dash = false; // busca otro objetivo en el próximo frame
         }
       }
 
