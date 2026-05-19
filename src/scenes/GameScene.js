@@ -17,14 +17,15 @@ import { createBackdrop } from '../backdrop.js';
 import { Sfx } from '../sfx.js';
 import { Music } from '../music.js';
 import { LEVEL_BY_N } from '../data/levels.js';
-import { WEAPONS, WEAPON_IDS, tx, cardMeta, wname } from '../data/upgrades.js';
+import { WEAPONS, WEAPON_IDS, tx, cardMeta, wname, CAP_COMMON } from '../data/upgrades.js';
 import {
   newUpgState,
   weaponStats,
   applyUpg,
   draftPool,
   occupiesSlot,
-  isUnlocked
+  isUnlocked,
+  specialSlotsOpen
 } from '../upgradeEngine.js';
 import { Economy } from '../economy.js';
 import {
@@ -1923,12 +1924,31 @@ export default class GameScene extends Phaser.Scene {
     };
   }
 
-  // Modo dev: SIMULA el draft real (mismas reglas: arma sin tener => carta
-  // de conseguirla; ya conseguida => su próxima mejora posible según el
-  // estado/hitos), pero mostrando TODAS esas opciones para elegir siempre.
+  // Modo dev: simula las REGLAS reales pero mostrando TODAS las opciones:
+  //  · armas que NO tengo  -> carta de conseguirla (todas las nuevas).
+  //  · armas que SÍ tengo  -> todas sus comunes (mejoras base) disponibles.
+  //  · si toca hito especial -> sus especiales pendientes (y no comunes).
   _devChoices() {
-    const pool = draftPool(this.up, { bossCount: this.bossCount });
-    const choices = pool.map((p) => this._mkChoice(p));
+    const choices = [];
+    for (const wid of WEAPON_IDS) {
+      if (!isUnlocked(wid, this.bossCount)) continue;
+      const W = WEAPONS[wid];
+      const s = this.up[wid];
+      if (!s.owned) {
+        choices.push(this._mkChoice({ wid, kind: 'unlock', id: 'base' }));
+        continue;
+      }
+      const open = specialSlotsOpen(this.up, wid);
+      const pendingSp = W.specials.filter((sp) => !s.specials.includes(sp.id));
+      if (s.specials.length < open && pendingSp.length) {
+        for (const sp of pendingSp)
+          choices.push(this._mkChoice({ wid, kind: 'special', id: sp.id }));
+      } else if (s.totalCommons < CAP_COMMON) {
+        for (const c of W.commons)
+          if ((s.commons[c.id] || 0) < c.max)
+            choices.push(this._mkChoice({ wid, kind: 'common', id: c.id }));
+      }
+    }
     choices.push(this._repairChoice());
     return choices;
   }
