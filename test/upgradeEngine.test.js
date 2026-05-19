@@ -65,16 +65,18 @@ test('draftPool: con hito abierto la carta de esa arma es ESPECIAL (no común)',
   assert.equal(laser[0].kind, 'special');
 });
 
-test('draftPool: drone/blackhole bloqueados sin jefes; se abren por bossCount', () => {
+test('draftPool: desbloqueos por jefe drone(1)/railgun(2)/blackhole(3)', () => {
   const st = newUpgState();
   assert.equal(isUnlocked('drone', 0), false);
   assert.equal(isUnlocked('drone', 1), true);
-  assert.equal(isUnlocked('blackhole', 1), false);
-  assert.equal(isUnlocked('blackhole', 2), true);
+  assert.equal(isUnlocked('railgun', 1), false);
+  assert.equal(isUnlocked('railgun', 2), true);
+  assert.equal(isUnlocked('blackhole', 2), false);
+  assert.equal(isUnlocked('blackhole', 3), true);
   const p0 = draftPool(st, { bossCount: 0 }).map((c) => c.wid);
-  assert.ok(!p0.includes('drone') && !p0.includes('blackhole'));
-  const p2 = draftPool(st, { bossCount: 2 }).map((c) => c.wid);
-  assert.ok(p2.includes('drone') && p2.includes('blackhole'));
+  assert.ok(!p0.includes('drone') && !p0.includes('railgun') && !p0.includes('blackhole'));
+  const p3 = draftPool(st, { bossCount: 3 }).map((c) => c.wid);
+  assert.ok(p3.includes('drone') && p3.includes('railgun') && p3.includes('blackhole'));
 });
 
 test('draftPool: tope de comunes respeta CAP_COMMON', () => {

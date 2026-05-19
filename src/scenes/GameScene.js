@@ -505,6 +505,7 @@ export default class GameScene extends Phaser.Scene {
     if (this.up.nova.owned) add('nova', Math.min(MAX_RANGE, this.ws('nova').radius));
     if (this.up.orbital.owned) add('orbital', this.ws('orbital').radius);
     if (this.up.blackhole.owned) add('blackhole', this.ws('blackhole').radius);
+    if (this.up.railgun.owned) add('railgun', this.scaledRange(this.ws('railgun').range));
     return out;
   }
 
@@ -966,6 +967,7 @@ export default class GameScene extends Phaser.Scene {
       const off = (i - (n - 1) / 2) * spread;
       const b = this.fireBullet(baseAng + off, st.bulletSpeed, damage, st.pierce, 'kinetic');
       b.explode = !!st.special.explosive;
+      b.bounce = st.special.ricochet ? 2 : 0;
     }
     this.sfx?.play('shoot');
   }
@@ -977,6 +979,8 @@ export default class GameScene extends Phaser.Scene {
     b.pierce = pierce;
     b.dmgType = type;
     b.explode = false;
+    b.bounce = 0;
+    b._spd = speed;
     if (b._hit) b._hit.clear();
     else b._hit = new Set();
     b.body.setCircle(4, b.width / 2 - 4, b.height / 2 - 4);
@@ -997,7 +1001,63 @@ export default class GameScene extends Phaser.Scene {
     if (U.shield.owned) this.tickShield(dt);
     if (U.drone.owned) this.tickDrone(dt);
     if (U.blackhole.owned) this.tickBlackhole(dt);
+    if (U.railgun.owned) this.tickRailgun(dt);
     this.updateOrbs(dt);
+  }
+
+  // Cañón de Riel (recompensa Jefe 2): disparo lento, line-pierce brutal.
+  tickRailgun(dt) {
+    const st = this.ws('railgun');
+    this.abilityTimers.rail = (this.abilityTimers.rail || 0) + dt;
+    if (this.abilityTimers.rail < st.cooldownMs / this.abilRateMul) return;
+    const range = this.scaledRange(st.range);
+    const inR = [];
+    this.enemies.children.iterate((e) => {
+      if (!e || !e.active || e._untargetable) return;
+      const d = Math.hypot(e.x - CX, e.y - CY);
+      if (d <= range) inR.push({ e, d });
+    });
+    if (!inR.length) return;
+    this.abilityTimers.rail = 0;
+    this.sfx?.play('shieldbreak');
+    inR.sort((a, b) => a.d - b.d);
+    const used = new Set();
+    for (let bI = 0; bI < st.beams; bI++) {
+      const aim = inR.find((o) => !used.has(o.e));
+      if (!aim) break;
+      const ang = Math.atan2(aim.e.y - CY, aim.e.x - CX);
+      const ux = Math.cos(ang);
+      const uy = Math.sin(ang);
+      for (const { e } of inR) {
+        const tp = (e.x - CX) * ux + (e.y - CY) * uy;
+        if (tp < 0 || tp > range) continue;
+        if (Math.abs((e.x - CX) * uy - (e.y - CY) * ux) > st.width) continue;
+        used.add(e);
+        let dmg = st.damage;
+        if (st.crit > 0 && Math.random() < st.crit) dmg *= 2;
+        if (st.special.antimatter && e.flags && e.flags.boss) dmg *= 3;
+        this.damageEnemy(e, dmg, 'kinetic');
+        if (st.special.shock) e.slowUntil = this.timeSurvived + 1500;
+      }
+      // Haz grueso que se desvanece (~260ms; no en laserGfx que se limpia).
+      const g = this.add.graphics().setDepth(6).setBlendMode(ADD);
+      g.lineStyle(Math.max(5, st.width / 2), 0xa0f0ff, 0.9);
+      g.lineBetween(CX, CY, CX + ux * range, CY + uy * range);
+      this.tweens.add({ targets: g, alpha: 0, duration: 260, onComplete: () => g.destroy() });
+      const fx = this.getGlow();
+      fx.setPosition(CX + ux * range, CY + uy * range)
+        .setTint(0xa0f0ff)
+        .setScale(0.5)
+        .setAlpha(0.7)
+        .setDepth(6);
+      this.tweens.add({
+        targets: fx,
+        scale: 1.4,
+        alpha: 0,
+        duration: 260,
+        onComplete: () => this.freeGlow(fx)
+      });
+    }
   }
 
   tickMissiles(dt) {
@@ -1196,6 +1256,7 @@ export default class GameScene extends Phaser.Scene {
     this.shieldResist = st.resist || 0;
     this._thorns = !!st.special.thorns;
     this._absorb = !!st.special.absorb;
+    this._shieldBurst = !!st.special.burst;
     if (this.shield < this.shieldMax)
       this.shield = Math.min(this.shieldMax, this.shield + st.regenPerSec * (dt / 1000));
     const ratio = this.shieldMax > 0 ? this.shield / this.shieldMax : 0;
@@ -1320,8 +1381,33 @@ export default class GameScene extends Phaser.Scene {
     bullet._hit.add(enemy);
     this.damageEnemy(enemy, bullet.damage, bullet.dmgType);
     if (bullet.explode) this.plasmaField(bullet.x, bullet.y, bullet.damage, 'kinetic', 40);
-    if (bullet.pierce > 0) bullet.pierce--;
-    else this.kill(bullet);
+    if (bullet.pierce > 0) {
+      bullet.pierce--;
+      return;
+    }
+    // ESPECIAL cañón "Rebote": redirige a otro enemigo cercano (hasta N).
+    if (bullet.bounce > 0) {
+      let best = null;
+      let bd = 240 * 240;
+      this.enemies.children.iterate((o) => {
+        if (!o || !o.active || o === enemy || o._untargetable) return;
+        const dd = (o.x - bullet.x) ** 2 + (o.y - bullet.y) ** 2;
+        if (dd < bd) {
+          bd = dd;
+          best = o;
+        }
+      });
+      if (best) {
+        bullet.bounce--;
+        bullet._hit.clear();
+        bullet._hit.add(enemy);
+        const a = Math.atan2(best.y - bullet.y, best.x - bullet.x);
+        const spd = bullet._spd || 420;
+        bullet.body.setVelocity(Math.cos(a) * spd, Math.sin(a) * spd);
+        return;
+      }
+    }
+    this.kill(bullet);
   }
 
   onMissileHit(missile, enemy) {
@@ -1486,7 +1572,8 @@ export default class GameScene extends Phaser.Scene {
         localStorage.setItem('os_bosses', String(after));
         // Mensaje "arma desbloqueada" (una sola vez por arma, persistido).
         if (before < 1 && after >= 1) this.announceUnlock('drone');
-        if (before < 2 && after >= 2) this.announceUnlock('blackhole');
+        if (before < 2 && after >= 2) this.announceUnlock('railgun');
+        if (before < 3 && after >= 3) this.announceUnlock('blackhole');
         // NO termina el nivel por sí solo: también hay que cumplir la cuota.
         // El chequeo combinado vive en update() (quotaDone && bossDone).
         this._bossKilled = true;
@@ -1614,6 +1701,27 @@ export default class GameScene extends Phaser.Scene {
       this.shield -= absorbed;
       amount -= absorbed;
       if (this._thorns) this.shieldThorns(raw * 0.25); // ESPECIAL "Espinas"
+      // ESPECIAL "Detonación": al romperse el escudo, onda alrededor.
+      if (this.shield <= 0 && this._shieldBurst) {
+        this._shieldBurst = false; // una vez por recarga (tickShield lo repone)
+        this.sfx?.play('shieldbreak');
+        const R = 150;
+        const ring = this.add
+          .circle(CX, CY, STATION.radius, COLORS.shield, 0.35)
+          .setBlendMode(ADD)
+          .setDepth(6);
+        this.tweens.add({
+          targets: ring,
+          radius: R,
+          alpha: 0,
+          duration: 360,
+          onComplete: () => ring.destroy()
+        });
+        this.enemies.children.iterate((e) => {
+          if (e && e.active && Math.hypot(e.x - CX, e.y - CY) < R)
+            this.damageEnemy(e, 60, 'energy');
+        });
+      }
     }
     if (amount <= 0) return;
     this.hp = Math.max(0, this.hp - amount);

@@ -12,7 +12,8 @@ const ALIAS = {
   laser: 'laser_beam',
   shield: 'regen_shield',
   drone: 'drone',
-  blackhole: 'blackhole'
+  blackhole: 'blackhole',
+  railgun: 'railgun'
 };
 const norm = (id) => {
   const base = String(id || '').split('#')[0];
@@ -42,6 +43,13 @@ export function drawModuleIcon(g, id, cx, cy, r, color) {
         dot(Math.cos(a) * r, Math.sin(a) * r, r * 0.16);
       }
       dot(0, 0, r * 0.28);
+      break;
+    case 'railgun': // riel: doble carril + punta de proyectil
+      line(-r * 0.6, -r * 0.5, r * 0.7, -r * 0.5);
+      line(-r * 0.6, r * 0.5, r * 0.7, r * 0.5);
+      g.fillTriangle(
+        cx + r * 0.55, cy - r * 0.5, cx + r * 0.55, cy + r * 0.5, cx + r, cy
+      );
       break;
     case 'blackhole': // agujero negro (anillo + núcleo oscuro)
       g.strokeCircle(cx, cy, r * 0.9);

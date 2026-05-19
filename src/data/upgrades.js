@@ -3,10 +3,10 @@
 // especiales por arma = 48 cartas). Stats numéricos + textos es/en (pt cae a
 // es por ahora; i18n total de cartas = parche posterior, como pide el doc).
 //
-//  - 8 armas. cannon = base (no ocupa slot hasta el 1er upgrade).
+//  - 9 armas. cannon = base (no ocupa slot hasta el 1er upgrade).
 //  - commons: apilables hasta `max`. qty:true => penaliza daño global por stack.
-//  - specials: únicos. Ritmo: 2 comunes -> hito especial 1; 4 -> especial 2.
-//  - unlock: null | 'boss1' | 'boss2'.
+//  - specials: 3 por arma. Ritmo: 2 comunes -> especial 1; 4 -> 2; 6 -> 3.
+//  - unlock: null | 'boss1' | 'boss2' | 'boss3'.
 // El efecto numérico concreto lo aplica el resolver en GameScene (por id).
 // ---------------------------------------------------------------------------
 import { Lang } from '../i18n.js';
@@ -26,6 +26,10 @@ const S = (id, es, en, dEs, dEn) => ({ id, nm: { es, en }, ds: { es: dEs, en: dE
 export const WEAPONS = {
   cannon: {
     name: { es: 'Cañón', en: 'Cannon' },
+    blurb: {
+      es: 'Arma base: dispara balas al enemigo más cercano. Siempre activo.',
+      en: 'Base weapon: fires bullets at the nearest enemy. Always active.'
+    },
     type: 'kinetic',
     color: 0xfff07a,
     unlock: null,
@@ -39,12 +43,17 @@ export const WEAPONS = {
     ],
     specials: [
       S('explosive', 'Balas explosivas', 'Explosive rounds', 'Cada bala explota (AOE).', 'Each bullet explodes (AOE).'),
-      S('pierce', 'Perforación', 'Pierce', 'La bala atraviesa hasta 3 enemigos.', 'Bullets pierce up to 3 enemies.')
+      S('pierce', 'Perforación', 'Pierce', 'La bala atraviesa hasta 3 enemigos.', 'Bullets pierce up to 3 enemies.'),
+      S('ricochet', 'Rebote', 'Ricochet', 'La bala rebota a otro enemigo cercano.', 'Bullets bounce to a nearby enemy.')
     ]
   },
 
   missiles: {
     name: { es: 'Misiles', en: 'Missiles' },
+    blurb: {
+      es: 'Lanza misiles teledirigidos que persiguen y explotan al impactar.',
+      en: 'Launches homing missiles that chase and explode on impact.'
+    },
     type: 'explosive',
     color: 0xff7a59,
     unlock: null,
@@ -57,12 +66,17 @@ export const WEAPONS = {
     ],
     specials: [
       S('fission', 'Fisión', 'Fission', 'Al impactar se divide en 3.', 'Splits into 3 on impact.'),
-      S('plasma', 'Campo de plasma', 'Plasma field', 'Deja zona elemental al impactar.', 'Leaves an elemental zone on impact.')
+      S('plasma', 'Campo de plasma', 'Plasma field', 'Deja zona elemental al impactar.', 'Leaves an elemental zone on impact.'),
+      S('swarm', 'Saturación', 'Saturation', '+2 misiles por tanda.', '+2 missiles per volley.')
     ]
   },
 
   orbital: {
     name: { es: 'Anillo Orbital', en: 'Orbital Ring' },
+    blurb: {
+      es: 'Orbes que giran alrededor de la estación y dañan al tocar enemigos.',
+      en: 'Orbs that circle the station and damage enemies on contact.'
+    },
     type: 'kinetic',
     color: 0xc792ff,
     unlock: null,
@@ -75,12 +89,17 @@ export const WEAPONS = {
     ],
     specials: [
       S('pulse', 'Pulso al impactar', 'Impact pulse', 'Onda de área al golpear.', 'Area pulse on hit.'),
-      S('double', 'Anillo doble', 'Double ring', 'Segundo anillo inverso.', 'Second reversed ring.')
+      S('double', 'Anillo doble', 'Double ring', 'Segundo anillo inverso.', 'Second reversed ring.'),
+      S('heavy', 'Orbe pesado', 'Heavy orb', '×1.6 daño de contacto.', '×1.6 contact damage.')
     ]
   },
 
   nova: {
     name: { es: 'Pulso Nova', en: 'Nova Pulse' },
+    blurb: {
+      es: 'Onda expansiva periódica que daña a todo lo que esté en su radio.',
+      en: 'Periodic shockwave that damages everything within its radius.'
+    },
     type: 'elemental',
     color: 0x6fe3ff,
     unlock: null,
@@ -93,12 +112,17 @@ export const WEAPONS = {
     ],
     specials: [
       S('frost', 'Escarcha', 'Frost', 'Ralentiza 1.8s a los golpeados.', 'Slows hit enemies 1.8s.'),
-      S('poison', 'Veneno', 'Poison', '5 daño/s durante 4s.', '5 dmg/s for 4s.')
+      S('poison', 'Veneno', 'Poison', '5 daño/s durante 4s.', '5 dmg/s for 4s.'),
+      S('mega', 'Onda expansiva', 'Shockwave', '+40% radio y +25% daño.', '+40% radius and +25% damage.')
     ]
   },
 
   laser: {
     name: { es: 'Rayo de Plasma', en: 'Plasma Beam' },
+    blurb: {
+      es: 'Rayo continuo (ciclo on/off) que quema al objetivo más cercano.',
+      en: 'Continuous beam (on/off cycle) that burns the nearest target.'
+    },
     type: 'energy',
     color: 0xff4f86,
     unlock: null,
@@ -111,12 +135,17 @@ export const WEAPONS = {
     ],
     specials: [
       S('beam2', 'Doble láser', 'Twin laser', 'Un segundo rayo independiente a daño pleno.', 'A second independent beam at full damage.'),
-      S('pierceall', 'Perforación total', 'Full pierce', 'Atraviesa a todos en línea.', 'Pierces all enemies in line.')
+      S('pierceall', 'Perforación total', 'Full pierce', 'Atraviesa a todos en línea.', 'Pierces all enemies in line.'),
+      S('overcharge', 'Sobrecarga', 'Overcharge', 'Sin enfriamiento: el rayo es continuo.', 'No cooldown: the beam is continuous.')
     ]
   },
 
   shield: {
     name: { es: 'Escudo Regen', en: 'Regen Shield' },
+    blurb: {
+      es: 'Capa de escudo que absorbe daño y se regenera sola con el tiempo.',
+      en: 'Shield layer that absorbs damage and self-regenerates over time.'
+    },
     type: 'defense',
     color: 0x49f2c2,
     unlock: null,
@@ -129,12 +158,17 @@ export const WEAPONS = {
     ],
     specials: [
       S('absorb', 'Absorción', 'Absorb', 'Absorbe el golpe letal + 1s invul.', 'Absorbs a lethal hit + 1s invuln.'),
-      S('thorns', 'Espinas', 'Thorns', 'Refleja 25% del daño recibido.', 'Reflects 25% of damage taken.')
+      S('thorns', 'Espinas', 'Thorns', 'Refleja 25% del daño recibido.', 'Reflects 25% of damage taken.'),
+      S('burst', 'Detonación', 'Detonation', 'Al romperse, onda que daña alrededor.', 'On break, a wave damages around.')
     ]
   },
 
   drone: {
     name: { es: 'Drone de Combate', en: 'Combat Drone' },
+    blurb: {
+      es: 'Dron(es) que orbitan y disparan solos al enemigo más cercano.',
+      en: 'Drone(s) that orbit and auto-fire at the nearest enemy.'
+    },
     type: 'kinetic',
     color: 0x9ad0ff,
     unlock: 'boss1',
@@ -147,15 +181,45 @@ export const WEAPONS = {
     ],
     specials: [
       S('kamikaze', 'Kamikaze', 'Kamikaze', 'Explota al morir (AOE).', 'Explodes on death (AOE).'),
-      S('phase', 'Munición de fase', 'Phase ammo', 'Disparos pasan a energía.', 'Shots become energy type.')
+      S('phase', 'Munición de fase', 'Phase ammo', 'Disparos pasan a energía.', 'Shots become energy type.'),
+      S('rapid', 'Sobremarcha', 'Overdrive', '−50% enfriamiento de disparo.', '−50% shot cooldown.')
+    ]
+  },
+
+  // Recompensa del Jefe 2 (Nv10): cañón de riel — disparo lento y brutal
+  // que atraviesa TODA la línea. Distinto del láser (continuo).
+  railgun: {
+    name: { es: 'Cañón de Riel', en: 'Railgun' },
+    blurb: {
+      es: 'Disparo lento y brutal que atraviesa toda una línea de enemigos.',
+      en: 'Slow, brutal shot that pierces a whole line of enemies.'
+    },
+    type: 'kinetic',
+    color: 0xa0f0ff,
+    unlock: 'boss2',
+    base: { damage: 70, cooldownMs: 2200, range: 240, width: 22, crit: 0 },
+    commons: [
+      C('dmg', 3, '+Daño', '+Damage', '+20% daño del riel.', '+20% railgun damage.'),
+      C('rate', 3, '+Cadencia', '+Fire rate', '−12% enfriamiento.', '−12% cooldown.'),
+      C('width', 2, '+Calibre', '+Caliber', '+50% ancho del haz.', '+50% beam width.'),
+      C('crit', 3, '+Crítico', '+Crit', '+8% prob. de crítico (×2).', '+8% crit chance (×2).')
+    ],
+    specials: [
+      S('twin', 'Doble riel', 'Twin rail', 'Dispara a 2 objetivos a la vez.', 'Fires at 2 targets at once.'),
+      S('shock', 'Sobrecarga', 'Shock', 'Ralentiza 1.5s a los atravesados.', 'Slows pierced enemies 1.5s.'),
+      S('antimatter', 'Antimateria', 'Antimatter', '×3 daño contra jefes.', '×3 damage vs bosses.')
     ]
   },
 
   blackhole: {
     name: { es: 'Agujero Negro', en: 'Black Hole' },
+    blurb: {
+      es: 'Invoca una singularidad que atrae y daña a los enemigos en su zona.',
+      en: 'Summons a singularity that pulls in and damages enemies in its zone.'
+    },
     type: 'gravity',
     color: 0xb36bff,
-    unlock: 'boss2',
+    unlock: 'boss3',
     base: { dps: 18, durationMs: 2000, radius: 90, cooldownMs: 6000, pull: 60 },
     commons: [
       C('dmg', 3, '+Daño', '+Damage', '+25% daño/seg dentro.', '+25% dmg/s inside.'),
@@ -165,13 +229,16 @@ export const WEAPONS = {
     ],
     specials: [
       S('implosion', 'Implosión', 'Implosion', 'Al cerrar daña a todo lo de dentro.', 'On close, damages all inside.'),
-      S('distort', 'Distorsión', 'Distortion', 'Dentro reciben ×1.5 de TODO.', 'Inside take ×1.5 from ALL.')
+      S('distort', 'Distorsión', 'Distortion', 'Dentro reciben ×1.5 de TODO.', 'Inside take ×1.5 from ALL.'),
+      S('singularity', 'Singularidad', 'Singularity', '+60% radio y dura el doble.', '+60% radius, lasts twice as long.')
     ]
   }
 };
 
-// Nombre del arma según idioma (pt cae a es).
+// Nombre / descripción del arma según idioma (pt cae a es).
 export const wname = (wid) => tx(WEAPONS[wid].name);
+export const wblurb = (wid) =>
+  WEAPONS[wid].blurb ? tx(WEAPONS[wid].blurb) : '';
 
 const UNLOCK = { es: 'Conseguir esta arma (forma base).', en: 'Unlock this weapon (base form).' };
 
@@ -193,6 +260,6 @@ export function cardMeta(wid, kind, id) {
 
 export const WEAPON_IDS = Object.keys(WEAPONS);
 export const CAP_COMMON = 6; // tope de stacks comunes (suma)
-export const CAP_SPECIAL = 3; // huecos de especial (slice v1 tiene 2 por arma)
+export const CAP_SPECIAL = 3; // 3 especiales por arma (hitos 2/4/6)
 // Hitos: especial i (1-based) disponible tras (i*2) comunes acumulados.
 export const specialMilestone = (i) => i * 2;

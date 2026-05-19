@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_W, GAME_H, COLORS } from '../config.js';
-import { WEAPONS, tx, wname } from '../data/upgrades.js';
+import { WEAPONS, tx, wname, wblurb } from '../data/upgrades.js';
 import { buildTile } from '../ui/abilityTile.js';
 import { buildButton } from '../ui/button.js';
 import { Sfx } from '../sfx.js';
@@ -874,7 +874,16 @@ export default class UIScene extends Phaser.Scene {
         })
         .setOrigin(1, 0)
     );
-    y += 38;
+    y += 28;
+    const bl = this.add.text(lx, y, wblurb(wid), {
+      fontFamily: FONT_DATA,
+      fontSize: '12px',
+      color: '#aecbe0',
+      wordWrap: { width: w - 36 },
+      lineSpacing: 3
+    });
+    this.infoLayer.add(bl);
+    y += bl.height + 14;
     // SOLO lo que el jugador tiene en esta partida (su build), no el catálogo.
     this.infoLayer.add(
       this.add.text(lx, y, t('ui.upgrades_h'), {

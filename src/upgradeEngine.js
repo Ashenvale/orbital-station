@@ -18,6 +18,7 @@ export function isUnlocked(weaponId, bossCount) {
   if (!u) return true;
   if (u === 'boss1') return bossCount >= 1;
   if (u === 'boss2') return bossCount >= 2;
+  if (u === 'boss3') return bossCount >= 3;
   return true;
 }
 
@@ -99,28 +100,28 @@ export function weaponStats(wid, st) {
     case 'missiles':
       out.damage = b.damage * (1 + 0.18 * S('dmg')) * qm;
       out.cooldownMs = b.cooldownMs * Math.pow(0.85, S('rate'));
-      out.count = b.count + S('count');
+      out.count = b.count + S('count') + (sp('swarm') ? 2 : 0);
       out.range = b.range * (1 + 0.25 * S('range'));
       out.turn = b.turn;
       out.speed = b.speed;
       break;
     case 'orbital':
-      out.damage = b.damage * (1 + 0.2 * S('dmg')) * qm;
+      out.damage = b.damage * (1 + 0.2 * S('dmg')) * qm * (sp('heavy') ? 1.6 : 1);
       out.orbs = b.orbs + S('orb');
       out.radius = b.radius * (1 + 0.15 * S('radius'));
       out.speed = b.speed * (1 + 0.2 * S('ospeed'));
-      out.orbSize = b.orbSize;
+      out.orbSize = b.orbSize * (sp('heavy') ? 1.5 : 1);
       break;
     case 'nova':
-      out.damage = b.damage * (1 + 0.22 * S('dmg')) * qm;
-      out.radius = b.radius * (1 + 0.18 * S('radius'));
+      out.damage = b.damage * (1 + 0.22 * S('dmg')) * qm * (sp('mega') ? 1.25 : 1);
+      out.radius = b.radius * (1 + 0.18 * S('radius')) * (sp('mega') ? 1.4 : 1);
       out.cooldownMs = b.cooldownMs * Math.pow(0.88, S('cd'));
       out.waves = 1 + S('extra');
       break;
     case 'laser':
       out.dps = b.dps * (1 + 0.2 * S('dps')) * qm;
       out.onMs = b.onMs + 200 * S('on');
-      out.offMs = Math.max(280, b.offMs - 150 * S('off'));
+      out.offMs = sp('overcharge') ? 0 : Math.max(280, b.offMs - 150 * S('off'));
       out.range = b.range;
       out.beams = b.beams + (sp('beam2') ? 1 : 0); // especial: 2º láser pleno
       out.refract = S('refract'); // común: saltos a daño reducido
@@ -135,16 +136,24 @@ export function weaponStats(wid, st) {
       out.damage = b.damage * (1 + 0.18 * S('dmg')) * qm;
       out.count = 1 + S('count');
       out.hp = Math.round(b.hp * (1 + 0.3 * S('hp')));
-      out.cooldownMs = b.cooldownMs * Math.pow(0.85, S('rate'));
+      out.cooldownMs = b.cooldownMs * Math.pow(0.85, S('rate')) * (sp('rapid') ? 0.5 : 1);
       out.range = b.range;
       out.respawnMs = b.respawnMs;
       break;
     case 'blackhole':
       out.dps = b.dps * (1 + 0.25 * S('dmg'));
-      out.durationMs = b.durationMs + 500 * S('dur');
-      out.radius = b.radius * (1 + 0.2 * S('radius'));
+      out.durationMs = (b.durationMs + 500 * S('dur')) * (sp('singularity') ? 2 : 1);
+      out.radius = b.radius * (1 + 0.2 * S('radius')) * (sp('singularity') ? 1.6 : 1);
       out.cooldownMs = b.cooldownMs * Math.pow(0.85, S('cd'));
       out.pull = b.pull;
+      break;
+    case 'railgun':
+      out.damage = b.damage * (1 + 0.2 * S('dmg')) * qm;
+      out.cooldownMs = b.cooldownMs * Math.pow(0.88, S('rate'));
+      out.width = b.width * (1 + 0.5 * S('width'));
+      out.range = b.range;
+      out.crit = 0.08 * S('crit');
+      out.beams = sp('twin') ? 2 : 1;
       break;
   }
   return out;

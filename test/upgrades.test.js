@@ -14,7 +14,7 @@ import { Lang } from '../src/i18n.js';
 const TYPES = ['kinetic', 'explosive', 'energy', 'elemental', 'gravity', 'defense'];
 
 test('catálogo: 8 armas con estructura consistente', () => {
-  assert.equal(WEAPON_IDS.length, 8);
+  assert.equal(WEAPON_IDS.length, 9);
   for (const id of WEAPON_IDS) {
     const W = WEAPONS[id];
     assert.ok(W.name && W.name.es && W.name.en, `${id} name`);
@@ -22,7 +22,7 @@ test('catálogo: 8 armas con estructura consistente', () => {
     assert.equal(typeof W.color, 'number');
     assert.ok(W.base && typeof W.base === 'object');
     assert.ok(Array.isArray(W.commons) && W.commons.length >= 1);
-    assert.equal(W.specials.length, 2);
+    assert.equal(W.specials.length, 3);
     const cids = W.commons.map((c) => c.id);
     assert.equal(new Set(cids).size, cids.length, `${id} comunes únicos`);
     for (const c of W.commons) assert.ok(c.max >= 1);
@@ -31,11 +31,18 @@ test('catálogo: 8 armas con estructura consistente', () => {
   }
 });
 
-test('unlock por jefe: drone=boss1, blackhole=boss2, resto libre', () => {
+test('unlock por jefe: drone=boss1, railgun=boss2, blackhole=boss3', () => {
   assert.equal(WEAPONS.drone.unlock, 'boss1');
-  assert.equal(WEAPONS.blackhole.unlock, 'boss2');
+  assert.equal(WEAPONS.railgun.unlock, 'boss2');
+  assert.equal(WEAPONS.blackhole.unlock, 'boss3');
   assert.equal(WEAPONS.cannon.unlock, null);
   assert.equal(WEAPONS.cannon.baseSlotFree, true);
+});
+
+test('cada arma tiene blurb es/en', () => {
+  for (const id of WEAPON_IDS) {
+    assert.ok(WEAPONS[id].blurb && WEAPONS[id].blurb.es && WEAPONS[id].blurb.en, id);
+  }
 });
 
 test('hitos: especial i tras i*2 comunes', () => {
