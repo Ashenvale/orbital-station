@@ -25,8 +25,10 @@ export default class MenuScene extends Phaser.Scene {
     const q = new URLSearchParams(window.location.search);
     if (q.has('tut')) localStorage.removeItem('os_tut');
     if (q.has('reset')) {
-      ['os_tut', 'os_progress', 'os_stars', 'os_gold', 'os_power'].forEach((k) =>
-        localStorage.removeItem(k)
+      [
+        'os_tut', 'os_progress', 'os_stars', 'os_gold', 'os_power',
+        'os_bosses', 'os_unlocked_drone', 'os_unlocked_blackhole'
+      ].forEach((k) => localStorage.removeItem(k)
       );
     }
     // Primera vez de todas: directo al Nivel 1 con tutorial breve.

@@ -224,12 +224,14 @@ export default class UIScene extends Phaser.Scene {
     this.gs.events.off('enemyintro', this.queueEnemyCard, this);
     this.gs.events.off('reset', this.clearOverlays, this);
     this.gs.events.off('draftclosed', this.tutOnDraftClosed, this);
+    this.gs.events.off('unlocked', this.showUnlock, this);
     this.gs.events.on('levelup', this.showDraft, this);
     this.gs.events.on('gameover', this.showGameOver, this);
     this.gs.events.on('levelclear', this.showLevelClear, this);
     this.gs.events.on('enemyintro', this.queueEnemyCard, this);
     this.gs.events.on('reset', this.clearOverlays, this);
     this.gs.events.on('draftclosed', this.tutOnDraftClosed, this);
+    this.gs.events.on('unlocked', this.showUnlock, this);
     this.events.once('shutdown', () => {
       this.gs.events.off('levelup', this.showDraft, this);
       this.gs.events.off('gameover', this.showGameOver, this);
@@ -237,6 +239,7 @@ export default class UIScene extends Phaser.Scene {
       this.gs.events.off('enemyintro', this.queueEnemyCard, this);
       this.gs.events.off('reset', this.clearOverlays, this);
       this.gs.events.off('draftclosed', this.tutOnDraftClosed, this);
+      this.gs.events.off('unlocked', this.showUnlock, this);
     });
 
     if (this.gs.tutorial) this.tutStart();
@@ -462,6 +465,46 @@ export default class UIScene extends Phaser.Scene {
     });
 
     this.tutOnDraft(); // coach contextual (solo 1ª vez, tutorial)
+  }
+
+  // Aviso no bloqueante "arma desbloqueada" (lo dispara GameScene una vez).
+  showUnlock({ name, color }) {
+    const cx = GAME_W / 2;
+    const y = 148;
+    const w = GAME_W - 70;
+    const h = 76;
+    const cont = this.add.container(0, 0).setDepth(57);
+    const g = this.add.graphics();
+    g.fillStyle(0x0a1830, 0.96);
+    g.fillRoundedRect(cx - w / 2, y - h / 2, w, h, 12);
+    g.lineStyle(2, color, 0.95);
+    g.strokeRoundedRect(cx - w / 2, y - h / 2, w, h, 12);
+    const t1 = this.add
+      .text(cx, y - 14, t('ui.unlock_h'), {
+        fontFamily: FONT,
+        fontSize: '15px',
+        color: '#ffe640',
+        fontStyle: 'bold'
+      })
+      .setOrigin(0.5);
+    const t2 = this.add
+      .text(cx, y + 13, name, {
+        fontFamily: FONT,
+        fontSize: '22px',
+        color: hex(color),
+        fontStyle: 'bold'
+      })
+      .setOrigin(0.5);
+    cont.add([g, t1, t2]);
+    cont.setAlpha(0).setScale(0.9);
+    this.tweens.add({ targets: cont, alpha: 1, scale: 1, duration: 260, ease: 'Back.out' });
+    this.tweens.add({
+      targets: cont,
+      alpha: 0,
+      delay: 2600,
+      duration: 420,
+      onComplete: () => cont.destroy()
+    });
   }
 
   // ===========================================================================

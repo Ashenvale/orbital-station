@@ -701,6 +701,15 @@ export default class GameScene extends Phaser.Scene {
     this.cameras.main.shake(300, 0.008);
   }
 
+  // Aviso "arma desbloqueada" — UNA sola vez por arma (persistido).
+  announceUnlock(wid) {
+    const key = 'os_unlocked_' + wid;
+    if (localStorage.getItem(key) === '1') return;
+    localStorage.setItem(key, '1');
+    this.sfx?.play('win');
+    this.events.emit('unlocked', { wid, name: wname(wid), color: WEAPONS[wid].color });
+  }
+
   // Enemigos activos que cuentan para la cuota (ni jefe ni invocados).
   _activeQuotaCount() {
     let n = 0;
@@ -1472,8 +1481,12 @@ export default class GameScene extends Phaser.Scene {
         this.cameras.main.flash(180, 255, 43, 214);
         // Persistir conteo de jefes -> desbloquea Drone (1) y Agujero Negro (2).
         this.bossCount++;
-        const saved = parseInt(localStorage.getItem('os_bosses') || '0', 10) || 0;
-        localStorage.setItem('os_bosses', String(Math.max(this.bossCount, saved)));
+        const before = parseInt(localStorage.getItem('os_bosses') || '0', 10) || 0;
+        const after = Math.max(this.bossCount, before);
+        localStorage.setItem('os_bosses', String(after));
+        // Mensaje "arma desbloqueada" (una sola vez por arma, persistido).
+        if (before < 1 && after >= 1) this.announceUnlock('drone');
+        if (before < 2 && after >= 2) this.announceUnlock('blackhole');
         // NO termina el nivel por sí solo: también hay que cumplir la cuota.
         // El chequeo combinado vive en update() (quotaDone && bossDone).
         this._bossKilled = true;
@@ -1640,6 +1653,9 @@ export default class GameScene extends Phaser.Scene {
   }
 
   addXp(amount) {
+    // Partida terminada o en su "respiro" final: no más XP ni subir de nivel
+    // (no tiene sentido draftear con el nivel ya ganado/perdido).
+    if (this._won || this._winPending) return;
     this.xp += amount;
     let need = xpToNext(this.level);
     while (this.xp >= need) {
@@ -1658,6 +1674,7 @@ export default class GameScene extends Phaser.Scene {
   //  DRAFT
   // ===========================================================================
   openDraft() {
+    if (this._won || this._winPending) return; // partida terminada: sin draft
     this.drafting = true;
     this.running = false;
     this.physics.world.pause();
