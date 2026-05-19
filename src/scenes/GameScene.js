@@ -967,7 +967,7 @@ export default class GameScene extends Phaser.Scene {
       const off = (i - (n - 1) / 2) * spread;
       const b = this.fireBullet(baseAng + off, st.bulletSpeed, damage, st.pierce, 'kinetic');
       b.explode = !!st.special.explosive;
-      b.bounce = st.special.ricochet ? 2 : 0;
+      b.bounce = st.special.ricochet ? 1 : 0; // 1 rebote por la mejora
     }
     this.sfx?.play('shoot');
   }

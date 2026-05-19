@@ -1,39 +1,81 @@
 // ---------------------------------------------------------------------------
-// Música de fondo (loop) para los modos de juego. HTMLAudio singleton:
-// sobrevive cambios de escena, volumen persistido en localStorage.
-// El botón de sonido (mute) silencia SFX y música a la vez: compartimos la
-// misma clave 'os_muted' que usa sfx.js.
+// Música de fondo para los modos de juego. HTMLAudio singleton: sobrevive
+// cambios de escena, volumen persistido. El botón de sonido (mute) silencia
+// SFX + música (clave compartida 'os_muted').
+//
+// Robustez:
+//  - El mp3 tiene silencio al principio: arrancamos/reloopeamos en MUSIC_START.
+//  - Loop manual fiable: 'timeupdate' reentra un poco antes del final (sin
+//    cola muda) y 'ended' como respaldo.
+//  - Autoplay: si play() es bloqueado, se reintenta en el primer gesto del
+//    usuario (pointer/keydown/touch) mientras se quiera reproducir.
 // ---------------------------------------------------------------------------
 const VOL_KEY = 'os_music_vol';
 const MUTE_KEY = 'os_muted';
 const TRACK = 'music/neon-underworld.mp3'; // servido desde public/
-// El mp3 trae unos segundos de silencio/intro. Arrancamos (y reloopeamos)
-// desde aquí para que no haya hueco mudo. Ajustable a oído.
-const MUSIC_START = 2.4;
-// Techo: música SIEMPRE por debajo de los SFX. El slider (0..1) es relativo;
-// el volumen real del audio = vol * CEIL.
-const CEIL = 0.4;
+const MUSIC_START = 2.4; // salta el intro mudo
+const CEIL = 0.4; // techo: música por debajo de los SFX
 
 let audio = null;
-let wantPlaying = false; // un modo de juego pidió música
+let wantPlaying = false;
 let muted = localStorage.getItem(MUTE_KEY) === '1';
+let retryArmed = false;
 let vol = (() => {
   const v = parseFloat(localStorage.getItem(VOL_KEY));
   return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5;
 })();
 
+function tryPlay() {
+  if (!audio) return;
+  const p = audio.play();
+  if (p && p.catch) p.catch(() => armRetry());
+}
+
+// Reintenta arrancar en el primer gesto si el navegador bloqueó autoplay.
+function armRetry() {
+  if (retryArmed) return;
+  retryArmed = true;
+  const onGesture = () => {
+    if (wantPlaying && !muted && audio && audio.paused) tryPlay();
+  };
+  window.addEventListener('pointerdown', onGesture);
+  window.addEventListener('keydown', onGesture);
+  window.addEventListener('touchstart', onGesture);
+}
+
+// Coloca el cabezal en una posición válida [MUSIC_START, fin).
+function fixPos() {
+  if (!audio) return;
+  const d = audio.duration;
+  if (audio.currentTime < MUSIC_START || (d && audio.currentTime >= d - 0.25)) {
+    try {
+      audio.currentTime = MUSIC_START;
+    } catch (e) {
+      /* sin metadata todavía: lo reintenta loadedmetadata */
+    }
+  }
+}
+
 function el() {
   if (audio) return audio;
   audio = new Audio(import.meta.env.BASE_URL + TRACK);
-  audio.loop = false; // loop manual: reentra en MUSIC_START (sin silencio)
-  audio.volume = vol * CEIL;
+  audio.loop = false; // loop manual (saltando el intro mudo)
   audio.preload = 'auto';
-  // Reloop saltando el silencio del principio.
+  audio.volume = vol * CEIL;
+  // Loop fiable: reentra ~0.2s antes del final.
+  audio.addEventListener('timeupdate', () => {
+    if (!wantPlaying || muted) return;
+    const d = audio.duration;
+    if (d && audio.currentTime >= d - 0.2) {
+      audio.currentTime = MUSIC_START;
+      if (audio.paused) tryPlay();
+    }
+  });
+  // Respaldo por si 'timeupdate' no llega al final.
   audio.addEventListener('ended', () => {
     if (!wantPlaying || muted) return;
     audio.currentTime = MUSIC_START;
-    const p = audio.play();
-    if (p && p.catch) p.catch(() => {});
+    tryPlay();
   });
   return audio;
 }
@@ -41,22 +83,10 @@ function el() {
 function start() {
   const a = el();
   a.volume = vol * CEIL;
-  // Nunca reproducir el head mudo del track.
-  const seek = () => {
-    if (a.currentTime < MUSIC_START) {
-      try {
-        a.currentTime = MUSIC_START;
-      } catch (e) {
-        /* aún sin metadata: el listener lo reintenta */
-      }
-    }
-  };
-  if (a.readyState >= 1) seek();
-  else a.addEventListener('loadedmetadata', seek, { once: true });
-  if (a.paused) {
-    const p = a.play();
-    if (p && p.catch) p.catch(() => {});
-  }
+  if (a.readyState >= 1) fixPos();
+  else a.addEventListener('loadedmetadata', fixPos, { once: true });
+  if (a.paused) tryPlay();
+  armRetry(); // siempre disponible por si un play() futuro es bloqueado
 }
 
 export const Music = {
@@ -71,7 +101,6 @@ export const Music = {
       audio.currentTime = 0;
     }
   },
-  // Lo invoca el botón de sonido: corta/reanuda la música junto con los SFX.
   setMuted(m) {
     muted = !!m;
     if (muted) {
