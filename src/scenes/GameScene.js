@@ -1323,7 +1323,7 @@ export default class GameScene extends Phaser.Scene {
       const DASH_SP = st.speed * 1.7;
       const OVERSHOOT = 55;
       if (!d._dash) {
-        const tg = this.nearestEnemyToPoint(d.x, d.y);
+        const tg = this.nearestEnemyToPoint(d.x, d.y, this.scaledRange(st.range));
         if (tg) {
           const a = Math.atan2(tg.y - d.y, tg.x - d.x);
           d._dx = Math.cos(a);
@@ -1383,7 +1383,7 @@ export default class GameScene extends Phaser.Scene {
       if (st.special.gun) {
         d._gunT += dt;
         if (d._gunT >= st.cooldownMs / this.abilRateMul) {
-          const t2 = this.nearestEnemyToPoint(d.x, d.y);
+          const t2 = this.nearestEnemyToPoint(d.x, d.y, this.scaledRange(st.range));
           if (t2) {
             d._gunT = 0;
             const ga = Math.atan2(t2.y - d.y, t2.x - d.x);
