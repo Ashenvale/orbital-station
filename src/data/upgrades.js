@@ -166,8 +166,8 @@ export const WEAPONS = {
   drone: {
     name: { es: 'Drone de Combate', en: 'Combat Drone' },
     blurb: {
-      es: 'Dron con vida: ATRAVIESA enemigos a toda velocidad, sale por el otro lado y busca otro. Reaparece al morir. Disparo y explosión = mejoras.',
-      en: 'Drone with HP: DASHES through enemies at speed, exits the other side and seeks another. Respawns on death. Gun and explosion = upgrades.'
+      es: 'Dron con vida: ATRAVIESA enemigos y reaparece al morir. Con Cañón, orbita al enemigo disparándole y, al quedarse sin balas, lo atraviesa. Disparo y explosión = mejoras.',
+      en: 'Drone with HP: DASHES through enemies, respawns on death. With Gun it orbits the enemy shooting and, out of ammo, dashes through it. Gun and explosion = upgrades.'
     },
     type: 'kinetic',
     color: 0x9ad0ff,

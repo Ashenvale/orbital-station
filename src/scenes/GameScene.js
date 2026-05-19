@@ -1299,6 +1299,7 @@ export default class GameScene extends Phaser.Scene {
       d.phase = Math.random() * Math.PI * 2;
       d._gunT = 0;
       d._dash = false;
+      d.ammo = 5;
       this.drones.push(d);
     }
     while (this.drones.length > st.count) this.drones.pop().destroy();
@@ -1311,6 +1312,7 @@ export default class GameScene extends Phaser.Scene {
           d.dead = false;
           d.hp = d.maxHp;
           d._dash = false;
+          d.ammo = 5;
           d.setVisible(true).setActive(true);
           d.x = CX + Phaser.Math.Between(-40, 40);
           d.y = CY + Phaser.Math.Between(-40, 40);
@@ -1318,38 +1320,36 @@ export default class GameScene extends Phaser.Scene {
         continue;
       }
 
-      // Embestida tipo "pasada": elige un enemigo, lo ATRAVIESA rápido y
-      // sale por el otro lado; luego busca otro (puede o no ser el anterior).
       const DASH_SP = st.speed * 1.7;
       const OVERSHOOT = 55;
-      if (!d._dash) {
-        const tg = this.nearestEnemyToPoint(d.x, d.y, this.scaledRange(st.range));
-        if (tg) {
-          const a = Math.atan2(tg.y - d.y, tg.x - d.x);
-          d._dx = Math.cos(a);
-          d._dy = Math.sin(a);
-          d._dashLeft = Math.hypot(tg.x - d.x, tg.y - d.y) + OVERSHOOT;
-          d._dashHit = new Set();
-          d._dash = true;
-        } else {
-          // Sin enemigos en rango: ORBITA la estación (se acomoda al anillo).
-          const R = 72;
-          d._orbA = (d._orbA == null ? d.phase : d._orbA) + 1.6 * (dt / 1000);
-          const ox = CX + Math.cos(d._orbA) * R;
-          const oy = CY + Math.sin(d._orbA) * R;
-          const k = Math.min(1, 6 * (dt / 1000));
-          d.x += (ox - d.x) * k;
-          d.y += (oy - d.y) * k;
-          d.rotation = d._orbA + Math.PI / 2;
-        }
-      }
-      if (d._dash) {
+      const RANGE = this.scaledRange(st.range);
+      const AMMO = 5;
+      const ORBIT_R = 78;
+
+      const idleOrbitStation = () => {
+        const R = 72;
+        d._orbA = (d._orbA == null ? d.phase : d._orbA) + 1.6 * (dt / 1000);
+        const ox = CX + Math.cos(d._orbA) * R;
+        const oy = CY + Math.sin(d._orbA) * R;
+        const k = Math.min(1, 6 * (dt / 1000));
+        d.x += (ox - d.x) * k;
+        d.y += (oy - d.y) * k;
+        d.rotation = d._orbA + Math.PI / 2;
+      };
+      const startDash = (tx, ty) => {
+        const a = Math.atan2(ty - d.y, tx - d.x);
+        d._dx = Math.cos(a);
+        d._dy = Math.sin(a);
+        d._dashLeft = Math.hypot(tx - d.x, ty - d.y) + OVERSHOOT;
+        d._dashHit = new Set();
+        d._dash = true;
+      };
+      const stepDash = () => {
         const step = DASH_SP * (dt / 1000);
         d.x += d._dx * step;
         d.y += d._dy * step;
         d._dashLeft -= step;
         d.rotation = Math.atan2(d._dy, d._dx) + Math.PI / 2;
-        // Daña (1 vez por pasada) a cada enemigo que atraviesa; pierde HP.
         this.enemies.children.iterate((e) => {
           if (!e || !e.active || e._untargetable || d._dashHit.has(e)) return;
           if (Math.hypot(e.x - d.x, e.y - d.y) < 26) {
@@ -1359,13 +1359,55 @@ export default class GameScene extends Phaser.Scene {
             this.spawnDeathFx(d.x, d.y, 0x9ad0ff);
           }
         });
-        const out =
-          d.x < M || d.x > GAME_W - M || d.y < M || d.y > GAME_H - M;
+        const out = d.x < M || d.x > GAME_W - M || d.y < M || d.y > GAME_H - M;
         if (d._dashLeft <= 0 || out) {
           d.x = Phaser.Math.Clamp(d.x, M, GAME_W - M);
           d.y = Phaser.Math.Clamp(d.y, M, GAME_H - M);
-          d._dash = false; // busca otro objetivo en el próximo frame
+          d._dash = false;
+          d.ammo = AMMO; // recarga tras la pasada
         }
+      };
+
+      if (st.special.gun) {
+        // Cañón: ORBITA al enemigo disparándole; al quedarse sin balas lo
+        // ATRAVIESA (pasada), recarga y busca otro.
+        if (d.ammo == null) d.ammo = AMMO;
+        if (d._dash) {
+          stepDash();
+        } else {
+          const tg = this.nearestEnemyToPoint(d.x, d.y, RANGE);
+          if (!tg) {
+            idleOrbitStation();
+          } else {
+            d._orbA = (d._orbA == null ? d.phase : d._orbA) + 2.4 * (dt / 1000);
+            const ox = tg.x + Math.cos(d._orbA) * ORBIT_R;
+            const oy = tg.y + Math.sin(d._orbA) * ORBIT_R;
+            const k = Math.min(1, 7 * (dt / 1000));
+            d.x += (ox - d.x) * k;
+            d.y += (oy - d.y) * k;
+            d.rotation = Math.atan2(tg.y - d.y, tg.x - d.x) + Math.PI / 2;
+            d._gunT += dt;
+            if (d.ammo > 0 && d._gunT >= st.cooldownMs / this.abilRateMul) {
+              d._gunT = 0;
+              d.ammo--;
+              const ga = Math.atan2(tg.y - d.y, tg.x - d.x);
+              const b = this.fireBullet(
+                ga, 420, st.damage, 0, st.special.phase ? 'energy' : 'kinetic'
+              );
+              b.setPosition(d.x, d.y);
+              b.setTint(0x9ad0ff);
+            }
+            if (d.ammo <= 0) startDash(tg.x, tg.y); // sin balas => pasada
+          }
+        }
+      } else {
+        // Sin cañón: pasada pura (atraviesa y sale por el otro lado).
+        if (!d._dash) {
+          const tg = this.nearestEnemyToPoint(d.x, d.y, RANGE);
+          if (tg) startDash(tg.x, tg.y);
+          else idleOrbitStation();
+        }
+        if (d._dash) stepDash();
       }
 
       // Muere sin HP y reaparece tras respawnMs. La EXPLOSIÓN (AOE) es la
@@ -1381,23 +1423,6 @@ export default class GameScene extends Phaser.Scene {
         d.respawnAt = now + st.respawnMs;
         d.setVisible(false).setActive(false);
         continue;
-      }
-
-      // ESPECIAL "Cañón de drone": además dispara al más cercano.
-      if (st.special.gun) {
-        d._gunT += dt;
-        if (d._gunT >= st.cooldownMs / this.abilRateMul) {
-          const t2 = this.nearestEnemyToPoint(d.x, d.y, this.scaledRange(st.range));
-          if (t2) {
-            d._gunT = 0;
-            const ga = Math.atan2(t2.y - d.y, t2.x - d.x);
-            const b = this.fireBullet(
-              ga, 420, st.damage, 0, st.special.phase ? 'energy' : 'kinetic'
-            );
-            b.setPosition(d.x, d.y);
-            b.setTint(0x9ad0ff);
-          }
-        }
       }
     }
   }
