@@ -1858,76 +1858,82 @@ export default class GameScene extends Phaser.Scene {
   // ===========================================================================
   //  DRAFT
   // ===========================================================================
+  _mkChoice(p) {
+    const m = cardMeta(p.wid, p.kind, p.id);
+    const stacks = p.kind === 'common' ? (this.up[p.wid].commons[p.id] || 0) : 0;
+    const max = p.kind === 'common' ? WEAPONS[p.wid].commons.find((c) => c.id === p.id).max : 0;
+    const badge =
+      p.kind === 'special'
+        ? t('ui.tag_special')
+        : p.kind === 'unlock'
+          ? t('ui.tag_new')
+          : null;
+    return {
+      id: `${p.wid}:${p.kind}:${p.id}`,
+      name: m.weapon,
+      color: m.color,
+      icon: p.wid,
+      badge,
+      levelLabel:
+        p.kind === 'common'
+          ? `${m.title} ${stacks + 1}/${max}`
+          : p.kind === 'special'
+            ? m.title
+            : '',
+      level: p.kind === 'common' ? stacks + 1 : 0,
+      pips: false,
+      desc: m.desc
+    };
+  }
+
+  _repairChoice() {
+    return {
+      id: '__repair',
+      name: t('ui.repair_name'),
+      color: 0x9affc4,
+      icon: null,
+      badge: null,
+      levelLabel: t('ui.tag_support'),
+      level: 0,
+      pips: false,
+      desc: t('ui.repair_desc', { n: Math.round(this.maxHp * 0.25) })
+    };
+  }
+
+  // Todas las cartas elegibles (modo dev / botón "elegir cuando quiera").
+  _devChoices() {
+    const all = [];
+    for (const wid of WEAPON_IDS) {
+      const W = WEAPONS[wid];
+      const s = this.up[wid];
+      if (!s.owned) all.push({ wid, kind: 'unlock', id: 'base' });
+      for (const c of W.commons)
+        if ((s.commons[c.id] || 0) < c.max) all.push({ wid, kind: 'common', id: c.id });
+      for (const sp of W.specials)
+        if (!s.specials.includes(sp.id)) all.push({ wid, kind: 'special', id: sp.id });
+    }
+    const choices = all.map((p) => this._mkChoice(p));
+    choices.push(this._repairChoice());
+    return choices;
+  }
+
   openDraft() {
     if (this._won || this._winPending) return; // partida terminada: sin draft
     this.drafting = true;
     this.running = false;
     this.physics.world.pause();
 
+    // QA dev: ofrece TODAS las cartas elegibles (sin hitos/cap/pesos).
+    if (this.dev) {
+      this.events.emit('levelup', { choices: this._devChoices(), level: this.level, dev: true });
+      return;
+    }
+
     // Pool atómico (motor v0.7). Cada candidato = una carta apilable.
     let pool = draftPool(this.up, { bossCount: this.bossCount });
-
-    // Cap de slots (suave): si ya hay ABILITY_SLOTS armas ocupando hueco, no
-    // ofrecer la 1ª carta de un arma que aún no ocupa slot.
     const occupied = WEAPON_IDS.filter((w) => occupiesSlot(w, this.up)).length;
     if (occupied >= ABILITY_SLOTS) {
       pool = pool.filter((c) => occupiesSlot(c.wid, this.up));
-    }
-
-    const mkChoice = (p) => {
-      const m = cardMeta(p.wid, p.kind, p.id);
-      const stacks = p.kind === 'common' ? (this.up[p.wid].commons[p.id] || 0) : 0;
-      const max = p.kind === 'common' ? WEAPONS[p.wid].commons.find((c) => c.id === p.id).max : 0;
-      const badge =
-        p.kind === 'special'
-          ? t('ui.tag_special')
-          : p.kind === 'unlock'
-            ? t('ui.tag_new')
-            : null;
-      return {
-        id: `${p.wid}:${p.kind}:${p.id}`,
-        name: m.weapon,
-        color: m.color,
-        icon: p.wid,
-        badge,
-        levelLabel:
-          p.kind === 'common'
-            ? `${m.title} ${stacks + 1}/${max}`
-            : p.kind === 'special'
-              ? m.title
-              : '',
-        level: p.kind === 'common' ? stacks + 1 : 0,
-        pips: false,
-        desc: m.desc
-      };
-    };
-
-    // QA dev: ofrece TODAS las cartas elegibles (sin hitos/cap/pesos).
-    if (this.dev) {
-      const all = [];
-      for (const wid of WEAPON_IDS) {
-        const W = WEAPONS[wid];
-        const s = this.up[wid];
-        if (!s.owned) all.push({ wid, kind: 'unlock', id: 'base' });
-        for (const c of W.commons)
-          if ((s.commons[c.id] || 0) < c.max) all.push({ wid, kind: 'common', id: c.id });
-        for (const sp of W.specials)
-          if (!s.specials.includes(sp.id)) all.push({ wid, kind: 'special', id: sp.id });
-      }
-      const choices = all.map(mkChoice);
-      choices.push({
-        id: '__repair',
-        name: t('ui.repair_name'),
-        color: 0x9affc4,
-        icon: null,
-        badge: null,
-        levelLabel: t('ui.tag_support'),
-        level: 0,
-        pips: false,
-        desc: t('ui.repair_desc', { n: Math.round(this.maxHp * 0.25) })
-      });
-      this.events.emit('levelup', { choices, level: this.level, dev: true });
-      return;
     }
 
     // Selección ponderada de hasta 3 cartas distintas.
@@ -1947,50 +1953,58 @@ export default class GameScene extends Phaser.Scene {
       }
       picks.push(bag.splice(idx, 1)[0]);
     }
-
-    const choices = picks.map(mkChoice);
-
-    // Relleno con "Reparar" si no hubo 3 cartas.
-    while (choices.length < 3) {
-      choices.push({
-        id: '__repair',
-        name: t('ui.repair_name'),
-        color: 0x9affc4,
-        icon: null,
-        badge: null,
-        levelLabel: t('ui.tag_support'),
-        level: 0,
-        pips: false,
-        desc: t('ui.repair_desc', { n: Math.round(this.maxHp * 0.25) })
-      });
-    }
-
+    const choices = picks.map((p) => this._mkChoice(p));
+    while (choices.length < 3) choices.push(this._repairChoice());
     this.events.emit('levelup', { choices, level: this.level });
   }
 
-  chooseDraft(id) {
+  // Botón DEV: abrir el selector completo CUANDO QUIERA (sin gastar nivel).
+  openDevPicker() {
+    if (!this.dev || !this.running || this.drafting || this._won || this._winPending) return;
+    this._devPicker = true;
+    this.drafting = true;
+    this.running = false;
+    this.physics.world.pause();
+    this.events.emit('levelup', { choices: this._devChoices(), level: this.level, dev: true });
+  }
+
+  _applyCard(id) {
     if (id === '__repair') {
       this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.25);
-    } else {
-      // id = "wid:kind:cardId"
-      const [wid, kind, cid] = id.split(':');
-      applyUpg(this.up, { wid, kind, id: cid });
-      if (wid === 'orbital') this.rebuildOrbs();
-      // El nuevo alcance "aparece": resalte del rango del arma conseguida.
-      const w = this.weaponRanges().find((x) => x.id === wid);
-      if (w) this.pingRange(w.range, w.color);
+      return;
     }
+    const [wid, kind, cid] = id.split(':'); // "wid:kind:cardId"
+    applyUpg(this.up, { wid, kind, id: cid });
+    if (wid === 'orbital') this.rebuildOrbs();
+    const w = this.weaponRanges().find((x) => x.id === wid);
+    if (w) this.pingRange(w.range, w.color);
+  }
 
+  _resumeFromDraft() {
+    this.drafting = false;
+    this.running = true;
+    this.physics.world.resume();
+    this.events.emit('draftclosed');
+  }
+
+  chooseDraft(id) {
+    this._applyCard(id);
     this.pendingLevelUps = Math.max(0, this.pendingLevelUps - 1);
+    if (this.pendingLevelUps > 0) this.openDraft();
+    else this._resumeFromDraft();
+  }
 
-    if (this.pendingLevelUps > 0) {
-      this.openDraft();
-    } else {
-      this.drafting = false;
-      this.running = true;
-      this.physics.world.resume();
-      this.events.emit('draftclosed');
+  // Selección desde el grid dev (level-up dev o botón a demanda).
+  devChoose(id) {
+    this._applyCard(id);
+    if (this._devPicker) {
+      this._devPicker = false;
+      this._resumeFromDraft(); // a demanda: no toca pendingLevelUps
+      return;
     }
+    this.pendingLevelUps = Math.max(0, this.pendingLevelUps - 1);
+    if (this.pendingLevelUps > 0) this.openDraft();
+    else this._resumeFromDraft();
   }
 
   // ===========================================================================

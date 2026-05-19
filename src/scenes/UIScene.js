@@ -207,6 +207,32 @@ export default class UIScene extends Phaser.Scene {
       this.showPause();
     });
 
+    // Botón DEV (solo ?dev=1): abre el selector completo cuando quieras.
+    if (this.gs.dev) {
+      this.devBtn = this.add
+        .text(14, GAME_H - 86, '✚ ARMA', {
+          fontFamily: FONT,
+          fontSize: '15px',
+          color: '#ffe640',
+          fontStyle: 'bold'
+        })
+        .setOrigin(0, 0.5)
+        .setInteractive({ useHandCursor: true });
+      this.devBtn.on('pointerover', () => Sfx.play('hover'));
+      this.devBtn.on('pointerdown', () => {
+        if (!this.gs.running || this.gs.drafting) return;
+        Sfx.play('open');
+        this.tweens.add({
+          targets: this.devBtn,
+          scale: 0.9,
+          duration: 70,
+          yoyo: true,
+          ease: 'Quad.out'
+        });
+        this.gs.openDevPicker();
+      });
+    }
+
     // -- Overlays -----------------------------------------------------------
     this.draftLayer = this.add.container(0, 0).setVisible(false).setDepth(50);
     this.overLayer = this.add.container(0, 0).setVisible(false).setDepth(50);
@@ -520,7 +546,7 @@ export default class UIScene extends Phaser.Scene {
             if (this._devScrollOff) this._devScrollOff();
             this.draftLayer.setVisible(false);
             this.draftLayer.removeAll(true);
-            this.gs.chooseDraft(c.id);
+            this.gs.devChoose(c.id);
           }
         })
       );
