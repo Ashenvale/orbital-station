@@ -1077,52 +1077,89 @@ export default class GameScene extends Phaser.Scene {
     });
     if (!inRange.length) return;
     inRange.sort((a, b) => a.d - b.d);
+    const lit = new Set();
     if (st.special.pierceall) {
-      // Rayo RECTO que apunta al más cercano y atraviesa a TODOS los que
-      // estén sobre esa línea (no un círculo): "perforación total".
-      const aim = inRange[0].e;
-      const ang = Math.atan2(aim.y - CY, aim.x - CX);
-      const ux = Math.cos(ang);
-      const uy = Math.sin(ang);
-      const ex = CX + ux * range;
-      const ey = CY + uy * range;
-      for (const { e } of inRange) {
-        const t = (e.x - CX) * ux + (e.y - CY) * uy; // proyección sobre el rayo
-        if (t < 0 || t > range) continue;
-        const perp = Math.abs((e.x - CX) * uy - (e.y - CY) * ux);
-        if (perp <= 24) this.damageEnemy(e, tick, 'energy');
+      // "Perforación total": rayo RECTO que atraviesa a todos en su línea.
+      // Sinergia: con "Doble láser" se disparan `st.beams` líneas (cada una
+      // apunta a un objetivo distinto); con "+Refracción" cada línea rebota
+      // desde su último enemigo perforado.
+      const nBeams = Math.max(1, st.beams);
+      let used = 0;
+      for (let bI = 0; bI < inRange.length && used < nBeams; bI++) {
+        const aim = inRange[bI].e;
+        if (lit.has(aim)) continue;
+        used++;
+        const ang = Math.atan2(aim.y - CY, aim.x - CX);
+        const ux = Math.cos(ang);
+        const uy = Math.sin(ang);
+        const ex = CX + ux * range;
+        const ey = CY + uy * range;
+        let farthest = aim;
+        let farT = -1;
+        for (const { e } of inRange) {
+          if (lit.has(e)) continue;
+          const tproj = (e.x - CX) * ux + (e.y - CY) * uy;
+          if (tproj < 0 || tproj > range) continue;
+          const perp = Math.abs((e.x - CX) * uy - (e.y - CY) * ux);
+          if (perp <= 24) {
+            this.damageEnemy(e, tick, 'energy');
+            lit.add(e);
+            if (tproj > farT) {
+              farT = tproj;
+              farthest = e;
+            }
+          }
+        }
+        this.drawLaserSeg(CX, CY, ex, ey, 5); // haz largo y visible
+        if (st.refract > 0 && farthest) {
+          this.laserChain(farthest.x, farthest.y, tick, lit, st.refract);
+        }
       }
-      this.drawLaserSeg(CX, CY, ex, ey, 5); // haz largo y visible
       return;
     }
-    // Haces independientes a daño pleno (base 1, +1 con el especial "Doble").
-    // Cada haz, además, REFRACTA: salta de su objetivo a otro cercano con
-    // daño decreciente (0.6^k) — tantos saltos como stacks de "+Refracción".
-    const lit = new Set();
+    // Haces independientes a daño pleno (base 1, +1 con especial "Doble").
+    // Cada haz REFRACTA: salta a otro cercano con daño decreciente (0.6^k).
     const beams = Math.min(inRange.length, st.beams);
     for (let bI = 0; bI < beams; bI++) {
-      let cur = inRange[bI].e;
+      const cur = inRange[bI].e;
       if (lit.has(cur)) continue;
       lit.add(cur);
       this.damageEnemy(cur, tick, 'energy');
       this.drawLaser(cur, 3); // estación -> objetivo (haz pleno)
-      for (let k = 1; k <= st.refract; k++) {
-        let best = null;
-        let bd = Infinity;
-        this.enemies.children.iterate((e) => {
-          if (!e || !e.active || e._untargetable || lit.has(e)) return;
-          const d = (e.x - cur.x) ** 2 + (e.y - cur.y) ** 2;
-          if (d < bd) {
-            bd = d;
-            best = e;
-          }
-        });
-        if (!best) break;
-        lit.add(best);
-        this.damageEnemy(best, tick * Math.pow(0.6, k), 'energy');
-        this.drawLaserSeg(cur.x, cur.y, best.x, best.y, 2); // salto
-        cur = best;
+      this.laserChain(cur.x, cur.y, tick, lit, st.refract);
+    }
+  }
+
+  // Salto más cercano a (x,y) NO golpeado, dentro de JUMP_R y EN PANTALLA
+  // (puede exceder el alcance base, pero nunca se va fuera del mapa).
+  _laserJumpTarget(x, y, lit) {
+    const JUMP_R = 220;
+    let best = null;
+    let bd = JUMP_R * JUMP_R;
+    this.enemies.children.iterate((e) => {
+      if (!e || !e.active || e._untargetable || lit.has(e)) return;
+      if (e.x < 6 || e.x > GAME_W - 6 || e.y < 6 || e.y > GAME_H - 6) return;
+      const d = (e.x - x) ** 2 + (e.y - y) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = e;
       }
+    });
+    return best;
+  }
+
+  // Cadena de refracción desde (sx,sy): `refract` saltos, daño 0.6^k.
+  laserChain(sx, sy, tick, lit, refract) {
+    let cx = sx;
+    let cy = sy;
+    for (let k = 1; k <= refract; k++) {
+      const nxt = this._laserJumpTarget(cx, cy, lit);
+      if (!nxt) break;
+      lit.add(nxt);
+      this.damageEnemy(nxt, tick * Math.pow(0.6, k), 'energy');
+      this.drawLaserSeg(cx, cy, nxt.x, nxt.y, 2);
+      cx = nxt.x;
+      cy = nxt.y;
     }
   }
 
