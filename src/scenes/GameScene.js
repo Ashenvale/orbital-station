@@ -1332,11 +1332,15 @@ export default class GameScene extends Phaser.Scene {
           d._dashHit = new Set();
           d._dash = true;
         } else {
-          // Sin enemigos: deriva suave cerca del centro.
-          const a = Math.atan2(CY - d.y, CX - d.x);
-          d.x += Math.cos(a) * st.speed * 0.4 * (dt / 1000);
-          d.y += Math.sin(a) * st.speed * 0.4 * (dt / 1000);
-          d.rotation += 4 * (dt / 1000);
+          // Sin enemigos en rango: ORBITA la estación (se acomoda al anillo).
+          const R = 72;
+          d._orbA = (d._orbA == null ? d.phase : d._orbA) + 1.6 * (dt / 1000);
+          const ox = CX + Math.cos(d._orbA) * R;
+          const oy = CY + Math.sin(d._orbA) * R;
+          const k = Math.min(1, 6 * (dt / 1000));
+          d.x += (ox - d.x) * k;
+          d.y += (oy - d.y) * k;
+          d.rotation = d._orbA + Math.PI / 2;
         }
       }
       if (d._dash) {
