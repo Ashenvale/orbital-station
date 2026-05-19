@@ -30,12 +30,9 @@ export default class MenuScene extends Phaser.Scene {
       ].forEach((k) => localStorage.removeItem(k)
       );
     }
-    // MODO DEV: ?dev=1 entra a un modo propio (enemigos infinitos, sin
-    // morir, elegís el arma cuando quieras). No toca los modos normales.
-    if (q.has('dev')) {
-      this.scene.start('GameScene', { dev: true });
-      return;
-    }
+    // MODO DEV: ?dev=1 NO entra solo (si no, al volver al menú rebota de
+    // nuevo a dev). Habilita un botón "DEV" en el menú para entrar/salir.
+    this._devAvail = q.has('dev');
     // Primera vez de todas: directo al Nivel 1 con tutorial breve.
     if (!localStorage.getItem('os_tut')) {
       this.scene.start('GameScene', { level: 1, tutorial: true });
@@ -133,6 +130,23 @@ export default class MenuScene extends Phaser.Scene {
         this.scene.start(scene);
       }).setDepth(UI);
     });
+
+    // Link DEV (solo si se entró con ?dev=1): modo prueba. Compacto, sobre
+    // los botones, para no chocar con el volumen/idioma de abajo.
+    if (this._devAvail) {
+      const devLink = this.add
+        .text(cx, btnY0 - 30, '⚙ MODO DEV', {
+          fontFamily: FONT,
+          fontSize: '16px',
+          color: '#ffe640',
+          fontStyle: 'bold'
+        })
+        .setOrigin(0.5)
+        .setDepth(UI);
+      makeTappable(this, devLink, () => this.scene.start('GameScene', { dev: true }), {
+        sound: 'select'
+      });
+    }
 
     // Volumen de música: − [NN%] +
     const volY = GAME_H - 98;
