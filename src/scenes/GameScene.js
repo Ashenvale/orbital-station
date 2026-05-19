@@ -159,6 +159,7 @@ export default class GameScene extends Phaser.Scene {
 
     this.laserGfx = this.add.graphics().setDepth(6).setBlendMode(ADD);
     this.enemyBars = this.add.graphics().setDepth(7); // barras de vida sobre enemigos
+    this.droneGfx = this.add.graphics().setDepth(7); // barra de vida del/los drone(s)
 
     // -- Colisiones ----------------------------------------------------------
     this.physics.add.overlap(this.bullets, this.enemies, this.onBulletHit, null, this);
@@ -1303,6 +1304,7 @@ export default class GameScene extends Phaser.Scene {
       this.drones.push(d);
     }
     while (this.drones.length > st.count) this.drones.pop().destroy();
+    this.droneGfx.clear();
 
     const M = 14;
     for (const d of this.drones) {
@@ -1424,6 +1426,16 @@ export default class GameScene extends Phaser.Scene {
         d.setVisible(false).setActive(false);
         continue;
       }
+
+      // Barra de vida del drone (sobre él).
+      const ratio = Phaser.Math.Clamp(d.hp / d.maxHp, 0, 1);
+      const bw = 24;
+      const bx = d.x - bw / 2;
+      const by = d.y - 20;
+      this.droneGfx.fillStyle(0x10081f, 0.85);
+      this.droneGfx.fillRect(bx - 1, by - 1, bw + 2, 5);
+      this.droneGfx.fillStyle(ratio > 0.35 ? 0x9ad0ff : 0xff5d6c, 1);
+      this.droneGfx.fillRect(bx, by, bw * ratio, 3);
     }
   }
 
