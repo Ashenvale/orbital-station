@@ -1621,6 +1621,9 @@ export default class GameScene extends Phaser.Scene {
   onEnemyReachStation(station, enemy) {
     if (!enemy.active) return;
     this.applyStationDamage(enemy.contactDmg);
+    // Aunque choque contra la base, el objeto destruido también da XP/oro.
+    this.addXp(enemy.xpValue || 0);
+    this.gold = (this.gold || 0) + (enemy.goldValue || 0);
     this.spawnDeathFx(enemy.x, enemy.y, 0xff8a8a);
     this.kill(enemy);
     this.cameras.main.shake(120, 0.006);
@@ -1858,8 +1861,6 @@ export default class GameScene extends Phaser.Scene {
   }
 
   addXp(amount) {
-    // Modo DEV: no hay XP/draft (las armas se eligen con el botón ✚ ARMA).
-    if (this.dev) return;
     // Partida terminada o en su "respiro" final: no más XP ni subir de nivel
     // (no tiene sentido draftear con el nivel ya ganado/perdido).
     if (this._won || this._winPending) return;
@@ -1937,6 +1938,13 @@ export default class GameScene extends Phaser.Scene {
     this.drafting = true;
     this.running = false;
     this.physics.world.pause();
+
+    // Modo DEV: el subir de nivel muestra el selector simulado completo
+    // (mismas reglas, pero elegís cualquiera). Solo afecta al modo dev.
+    if (this.dev) {
+      this.events.emit('levelup', { choices: this._devChoices(), level: this.level, dev: true });
+      return;
+    }
 
     // Pool atómico (motor v0.7). Cada candidato = una carta apilable.
     let pool = draftPool(this.up, { bossCount: this.bossCount });
