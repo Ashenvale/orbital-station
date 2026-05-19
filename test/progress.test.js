@@ -44,5 +44,5 @@ test('STAR_GOLD progresivo', () => {
 
 test('nextLevel: siguiente o null al final de la campaña', () => {
   assert.equal(Progress.nextLevel(1), 2);
-  assert.equal(Progress.nextLevel(16), null);
+  assert.equal(Progress.nextLevel(17), null);
 });

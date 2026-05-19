@@ -319,10 +319,14 @@ export default class UIScene extends Phaser.Scene {
 
     if (h.mode === 'level') {
       this.chipLabels.kills.setText(t('ui.c_obj', { n: h.levelNum }));
-      this.chipValues.kills.setText(`${h.kills}/${h.targetKills}`);
-      const done = h.kills >= h.targetKills;
-      const close = h.kills >= h.targetKills * 0.8;
-      this.chipValues.kills.setColor(done ? '#7affc4' : close ? '#ffc14f' : '#7fe8ff');
+      const q = h.quota || 0;
+      const quotaDone = q >= h.targetKills;
+      // Marca de jefe: ⚑ rojo = jefe vivo (falta matarlo aunque la cuota esté).
+      const bossTag = h.bossId ? (h.bossKilled ? ' ✔' : ' ⚑') : '';
+      this.chipValues.kills.setText(`${q}/${h.targetKills}${bossTag}`);
+      const allDone = quotaDone && (!h.bossId || h.bossKilled);
+      const close = q >= h.targetKills * 0.8;
+      this.chipValues.kills.setColor(allDone ? '#7affc4' : close ? '#ffc14f' : '#7fe8ff');
     } else {
       this.chipLabels.kills.setText(t('ui.c_kills'));
       this.chipValues.kills.setText(h.kills);

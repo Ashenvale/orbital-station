@@ -27,16 +27,24 @@ const ORDER = [
   'carrier'
 ];
 
-// Niveles de jefe (1-based).
-const BOSS_LEVELS = new Set([5, 10]);
-const TOTAL_LEVELS = ORDER.length + BOSS_LEVELS.size; // 16
+// Niveles de jefe (1-based): un jefe cada 5. Cada uno es un jefe DISTINTO.
+const BOSS_LEVELS = new Set([5, 10, 15]);
+const BOSS_IDS = ['boss_orbital', 'boss_siege', 'boss_warp'];
+const TOTAL_LEVELS = ORDER.length + BOSS_LEVELS.size; // 14 + 3 = 17
+
+function bossForLevel(n) {
+  let i = 0;
+  for (let k = 1; k <= n; k++) if (BOSS_LEVELS.has(k)) i++;
+  return BOSS_IDS[(i - 1) % BOSS_IDS.length];
+}
 
 function makeLevel(n) {
   const isBoss = BOSS_LEVELS.has(n);
+  const bossId = isBoss ? bossForLevel(n) : null;
   // Índice del tipo nuevo: cuenta solo niveles que NO son de jefe.
   let introIdx = 0;
   for (let k = 1; k < n; k++) if (!BOSS_LEVELS.has(k)) introIdx++;
-  const introduced = isBoss ? 'boss_core' : ORDER[introIdx];
+  const introduced = isBoss ? bossId : ORDER[introIdx];
   // Pool acumulado: todos los tipos introducidos hasta aquí.
   const pool = [];
   for (let k = 1; k <= n; k++) {
@@ -50,7 +58,7 @@ function makeLevel(n) {
     col: n % 2 === 0 ? 1 : 0, // zigzag del mapa estelar
     introduced,
     pool,
-    boss: isBoss ? 'boss_core' : null,
+    boss: bossId,
     // Cuota = enemigos que aparecen en total (exacta). Crece con el stage.
     targetKills: Math.round(40 + n * 16),
     hpMul: +(0.7 + (n - 1) * 0.07).toFixed(3),

@@ -43,7 +43,9 @@ export const ENEMY_ARCH = {
   stealth: 'fase',
   berserker: 'blindado',
   carrier: 'blindado',
-  boss_core: 'jefe'
+  boss_orbital: 'jefe',
+  boss_siege: 'jefe',
+  boss_warp: 'jefe'
 };
 
 const archOf = (id) => ARCH[ENEMY_ARCH[id]] || ARCH.caza;

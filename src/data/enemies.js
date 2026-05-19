@@ -130,23 +130,56 @@ export const ENEMY_CATALOG = {
     shape: (r) => [[-r, -r * 0.6], [r, -r * 0.6], [r * 0.6, r * 0.7], [-r * 0.6, r * 0.7]]
   },
 
-  // -- Jefe -----------------------------------------------------------------
-  boss_core: {
+  // -- JEFES (3 distintos, no kamikazes: atacan a distancia) ----------------
+  // bossKind define la IA en GameScene.tickBoss. dmgMul bajo = más aguante.
+
+  // Nv5 — Orbital: gira alrededor, dispara al centro y suelta drones.
+  boss_orbital: {
     color: 0xff4f86,
-    hp: 1600, speed: 12, contactDmg: 40, xp: 160, radius: 46, weight: 0,
-    move: 'straight',
-    flags: { boss: true, dmgMul: 0.8, carrier: 'drone', droneEveryMs: 3200, droneCount: 4 },
-    // Silueta de gran nave nodriza (apunta al centro como las naves).
+    hp: 2400, speed: 70, contactDmg: 16, xp: 220, radius: 42, weight: 0,
+    move: 'boss',
+    flags: {
+      boss: true, bossKind: 'orbital', dmgMul: 0.8,
+      orbitR: 200, fireMs: 1500, shotDmg: 8,
+      carrier: 'drone', droneEveryMs: 3400, droneCount: 3
+    },
     shape: (r) => [
-      [0, -r],
-      [r * 0.45, -r * 0.45],
-      [r, -r * 0.1],
-      [r * 0.7, r * 0.5],
-      [r * 0.35, r],
-      [-r * 0.35, r],
-      [-r * 0.7, r * 0.5],
-      [-r, -r * 0.1],
+      [0, -r], [r * 0.45, -r * 0.45], [r, -r * 0.1], [r * 0.7, r * 0.5],
+      [r * 0.35, r], [-r * 0.35, r], [-r * 0.7, r * 0.5], [-r, -r * 0.1],
       [-r * 0.45, -r * 0.45]
+    ]
+  },
+
+  // Nv10 — Asediador: avanza, se planta a media distancia y descarga
+  // andanadas. Acorazado: mucha vida y recibe poco daño.
+  boss_siege: {
+    color: 0xffa23d,
+    hp: 5200, speed: 26, contactDmg: 22, xp: 360, radius: 50, weight: 0,
+    move: 'boss',
+    flags: {
+      boss: true, bossKind: 'siege', dmgMul: 0.55,
+      holdR: 175, fireMs: 1900, volley: 3, shotDmg: 7
+    },
+    shape: (r) => [
+      [-r, -r * 0.7], [r, -r * 0.7], [r * 0.85, 0], [r, r * 0.7],
+      [-r, r * 0.7], [-r * 0.85, 0]
+    ]
+  },
+
+  // Nv15 — Devorador: parpadea por el anillo (golpe y huida), invoca
+  // interceptores y dispara ráfagas. Difícil de fijar.
+  boss_warp: {
+    color: 0xb36bff,
+    hp: 3200, speed: 95, contactDmg: 18, xp: 480, radius: 40, weight: 0,
+    move: 'boss',
+    flags: {
+      boss: true, bossKind: 'warp', dmgMul: 0.75,
+      blinkMs: 2400, fireMs: 1300, spread: 3, shotDmg: 9,
+      carrier: 'interceptor', droneEveryMs: 4200, droneCount: 2
+    },
+    shape: (r) => [
+      [0, -r], [r * 0.7, -r * 0.2], [r * 0.55, r * 0.85], [0, r * 0.45],
+      [-r * 0.55, r * 0.85], [-r * 0.7, -r * 0.2]
     ]
   }
 };

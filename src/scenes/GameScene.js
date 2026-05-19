@@ -100,6 +100,7 @@ export default class GameScene extends Phaser.Scene {
     this._won = false;
     this._winPending = false;
     this._bossSpawned = false;
+    this._bossKilled = false;
     this._goldBanked = false;
     this._seenTypes = new Set(); // tipos ya presentados (card) en esta partida
     // -- Sistema de upgrades v0.7 -------------------------------------------
@@ -124,6 +125,7 @@ export default class GameScene extends Phaser.Scene {
     this.xp = 0;
     this.kills = 0;
     this.spawned = 0; // enemigos generados (tope = targetKills en campaña)
+    this.quotaKills = 0; // bajas que cuentan para la cuota (no jefe ni invocados)
     this.gold = 0;
     this.timeSurvived = 0;
     this.pendingLevelUps = 0;
@@ -303,13 +305,15 @@ export default class GameScene extends Phaser.Scene {
 
     this.timeSurvived += dt;
 
-    // Fin de nivel (solo niveles SIN jefe; los de jefe terminan al matarlo):
-    //  - se cumplió la cuota de bajas, o
-    //  - ya aparecieron los X enemigos y no queda ninguno vivo.
-    if (this.mode === 'level' && !this._won && !this.bossId) {
-      const allCleared =
-        this.spawned >= this.targetKills && this.enemies.countActive(true) === 0;
-      if (this.kills >= this.targetKills || allCleared) this.triggerWin();
+    // Fin de nivel: hay que cumplir la CUOTA y, si el nivel tiene jefe,
+    // también MATARLO. Quota sin jefe = sigue; jefe sin quota = sigue.
+    // (Los enemigos que invoca el jefe NO cuentan para la cuota.)
+    if (this.mode === 'level' && !this._won) {
+      const quotaDone =
+        this.quotaKills >= this.targetKills ||
+        (this.spawned >= this.targetKills && this._activeQuotaCount() === 0);
+      const bossDone = !this.bossId || this._bossKilled;
+      if (quotaDone && bossDone) this.triggerWin();
     }
 
     const step = this.difficultyStep();
@@ -324,7 +328,7 @@ export default class GameScene extends Phaser.Scene {
     if (
       this.bossId &&
       !this._bossSpawned &&
-      this.kills >= Math.floor(this.targetKills * 0.6)
+      this.quotaKills >= Math.floor(this.targetKills * 0.6)
     ) {
       this._bossSpawned = true;
       this.sfx?.play('shieldbreak');
@@ -651,6 +655,10 @@ export default class GameScene extends Phaser.Scene {
     e._poisonDps = 0;
     e._untargetable = false;
     e._heldUntil = 0;
+    e._noQuota = false; // los invocados por jefe/portanaves se marcan true
+    e._atkT = 0;
+    e._blinkT = 0;
+    e._bossInit = false;
     const grow = e.flags.boss ? 1 : Math.pow(DIFFICULTY.enemyHpGrowth, step);
     e.maxHp = Math.round(def.hp * grow * this.lvlMul.hp);
     e.hp = e.maxHp;
@@ -686,6 +694,105 @@ export default class GameScene extends Phaser.Scene {
     this.cameras.main.shake(300, 0.008);
   }
 
+  // Enemigos activos que cuentan para la cuota (ni jefe ni invocados).
+  _activeQuotaCount() {
+    let n = 0;
+    this.enemies.children.iterate((e) => {
+      if (e && e.active && !e._noQuota && !(e.flags && e.flags.boss)) n++;
+    });
+    return n;
+  }
+
+  // IA de jefes (no kamikazes: mantienen distancia y atacan a distancia).
+  tickBoss(e, dt, fl, now, dx, dy, d) {
+    const ux = dx / d;
+    const uy = dy / d; // hacia el centro
+    const tx = -uy;
+    const ty = ux; // tangente
+    const spd = e.baseSpeed;
+    e.rotation = Math.atan2(dy, dx) + Math.PI / 2;
+    e._atkT += dt;
+
+    if (fl.bossKind === 'orbital') {
+      const R = Math.min(fl.orbitR, MAX_RANGE - 20);
+      const radial = Phaser.Math.Clamp((R - d) * 1.6, -spd, spd); // mantener R
+      e.body.setVelocity(tx * spd - ux * radial, ty * spd - uy * radial);
+      if (e._atkT >= fl.fireMs) {
+        e._atkT = 0;
+        this.bossFire(e, fl.shotDmg, 1, fl);
+      }
+    } else if (fl.bossKind === 'siege') {
+      const R = fl.holdR;
+      if (d > R + 6) {
+        e.body.setVelocity(ux * spd, uy * spd); // avanza
+      } else {
+        e.body.setVelocity(tx * spd * 0.35, ty * spd * 0.35); // se planta
+      }
+      if (e._atkT >= fl.fireMs) {
+        e._atkT = 0;
+        this.bossFire(e, fl.shotDmg, fl.volley, fl);
+      }
+    } else if (fl.bossKind === 'warp') {
+      e._blinkT += dt;
+      const warping = now < (e._warpUntil || 0);
+      e._untargetable = warping;
+      e.setAlpha(warping ? 0.25 : 1);
+      if (e._blinkT >= fl.blinkMs && !warping) {
+        e._blinkT = 0;
+        e._warpUntil = now + 260; // breve fase de salto (intargeteable)
+        const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        const rr = MAX_RANGE * 0.85;
+        e.x = CX + Math.cos(a) * rr;
+        e.y = CY + Math.sin(a) * rr;
+        this.cameras.main.flash(120, 150, 80, 255);
+      }
+      e.body.setVelocity(tx * spd * (warping ? 0 : 0.6), ty * spd * (warping ? 0 : 0.6));
+      if (!warping && e._atkT >= fl.fireMs) {
+        e._atkT = 0;
+        this.bossFire(e, fl.shotDmg, fl.spread, fl);
+      }
+    } else {
+      // fallback: orbita defensiva
+      const radial = Phaser.Math.Clamp((MAX_RANGE * 0.7 - d) * 1.5, -spd, spd);
+      e.body.setVelocity(tx * spd - ux * radial, ty * spd - uy * radial);
+    }
+  }
+
+  // Disparo de jefe: proyectiles telegrafiados hacia la estación.
+  bossFire(e, dmg, n, fl) {
+    if (this._won || this._winPending) return;
+    this.sfx?.play('shoot');
+    const base = Math.atan2(CY - e.y, CX - e.x);
+    for (let i = 0; i < n; i++) {
+      const off = n > 1 ? (i - (n - 1) / 2) * 0.18 : 0;
+      const ang = base + off;
+      const p = this.add
+        .circle(e.x, e.y, 6, 0xff4f86, 1)
+        .setBlendMode(ADD)
+        .setDepth(6);
+      p.setStrokeStyle(2, 0xffffff, 0.8);
+      const tx = e.x + Math.cos(ang) * 900;
+      const ty = e.y + Math.sin(ang) * 900;
+      // Viaja recto; daña la estación si la cruza (no es kamikaze del jefe).
+      const dur = 1100;
+      const tw = this.tweens.add({
+        targets: p,
+        x: tx,
+        y: ty,
+        duration: dur,
+        onUpdate: () => {
+          if (!p.active) return;
+          if (Math.hypot(p.x - CX, p.y - CY) <= STATION.radius + 6) {
+            this.applyStationDamage(dmg);
+            tw.stop();
+            p.destroy();
+          }
+        },
+        onComplete: () => p.active && p.destroy()
+      });
+    }
+  }
+
   updateEnemies(dt) {
     const now = this.timeSurvived;
     this.enemies.children.iterate((e) => {
@@ -706,6 +813,19 @@ export default class GameScene extends Phaser.Scene {
       const dx = CX - e.x;
       const dy = CY - e.y;
       const d = Math.hypot(dx, dy) || 1;
+
+      // Jefes: IA propia (NO se lanzan al centro). Maneja todo y sale.
+      if (fl.boss) {
+        this.tickBoss(e, dt, fl, now, dx, dy, d);
+        if (fl.healer || fl.shielder || fl.carrier) {
+          e._auraT += dt;
+          if (e._auraT >= 360) {
+            this.enemyAura(e, fl, e._auraT);
+            e._auraT = 0;
+          }
+        }
+        return;
+      }
 
       // Bomba: detona por proximidad (no por contacto).
       if (fl.bomb && d <= fl.bombRange) {
@@ -769,13 +889,15 @@ export default class GameScene extends Phaser.Scene {
       e._droneT += elapsed;
       if (e._droneT >= fl.droneEveryMs) {
         e._droneT = 0;
-        for (let i = 0; i < fl.droneCount; i++)
-          this.makeEnemy(
+        for (let i = 0; i < fl.droneCount; i++) {
+          const child = this.makeEnemy(
             fl.carrier,
             e.x + Phaser.Math.Between(-26, 26),
             e.y + Phaser.Math.Between(-26, 26),
             this.difficultyStep()
           );
+          child._noQuota = true; // invocado: no cuenta para la cuota
+        }
       }
     }
   }
@@ -1283,6 +1405,8 @@ export default class GameScene extends Phaser.Scene {
       this.spawnDeathFx(enemy.x, enemy.y, wasBoss ? 0xff4f86 : COLORS.xp);
       this.sfx?.play('explosion');
       this.kills++;
+      // Cuota: solo enemigos "normales" (ni jefe ni invocados por él).
+      if (!wasBoss && !enemy._noQuota) this.quotaKills++;
       this.registerKillstreak();
       this.addXp(enemy.xpValue);
       this.gold = (this.gold || 0) + (enemy.goldValue || 0);
@@ -1297,7 +1421,9 @@ export default class GameScene extends Phaser.Scene {
         this.bossCount++;
         const saved = parseInt(localStorage.getItem('os_bosses') || '0', 10) || 0;
         localStorage.setItem('os_bosses', String(Math.max(this.bossCount, saved)));
-        if (this.mode === 'level') this.triggerWin();
+        // NO termina el nivel por sí solo: también hay que cumplir la cuota.
+        // El chequeo combinado vive en update() (quotaDone && bossDone).
+        this._bossKilled = true;
       }
     }
   }
@@ -1708,6 +1834,10 @@ export default class GameScene extends Phaser.Scene {
       mode: this.mode,
       levelNum: this.levelNum,
       targetKills: this.targetKills,
+      quota: this.quotaKills,
+      bossId: this.bossId,
+      bossKilled: this._bossKilled,
+      bossAlive: !!this.bossId && this._bossSpawned && !this._bossKilled,
       diff: this.difficultyStep() + 1
     };
   }
