@@ -34,7 +34,7 @@ export const WEAPONS = {
     color: 0xfff07a,
     unlock: null,
     baseSlotFree: true, // no ocupa slot hasta el 1er upgrade
-    base: { damage: 7, cooldownMs: 620, projectiles: 1, bulletSpeed: 420, range: 175, crit: 0 },
+    base: { damage: 7, cooldownMs: 620, projectiles: 1, bulletSpeed: 420, range: 230, crit: 0 },
     commons: [
       C('dmg', 3, '+Daño', '+Damage', '+15% daño por bala.', '+15% damage per shot.'),
       C('rate', 3, '+Cadencia', '+Fire rate', '−12% enfriamiento.', '−12% cooldown.'),
@@ -57,12 +57,12 @@ export const WEAPONS = {
     type: 'explosive',
     color: 0xff7a59,
     unlock: null,
-    base: { cooldownMs: 1600, count: 1, damage: 16, range: 300, turn: 0.12, speed: 230 },
+    base: { cooldownMs: 1600, count: 1, damage: 16, range: 210, turn: 0.12, speed: 230 },
     commons: [
       C('dmg', 3, '+Daño', '+Damage', '+18% daño por misil.', '+18% damage per missile.'),
       C('rate', 3, '+Cadencia', '+Fire rate', '−15% entre tandas.', '−15% between volleys.'),
       C('count', 2, '+Misil', '+Missile', '+1 misil. Daño −15%/stack.', '+1 missile. Damage −15%/stack.', true),
-      C('range', 2, '+Rango', '+Range', '+25% rango de búsqueda.', '+25% search range.')
+      C('track', 3, '+Rastreo', '+Tracking', 'El misil persigue (base va recto). +giro/stack.', 'Missiles seek (base flies straight). +turn/stack.')
     ],
     specials: [
       S('fission', 'Fisión', 'Fission', 'Al impactar se divide en 3.', 'Splits into 3 on impact.'),
@@ -126,7 +126,7 @@ export const WEAPONS = {
     type: 'energy',
     color: 0xff4f86,
     unlock: null,
-    base: { dps: 24, onMs: 1400, offMs: 1200, range: 300, beams: 1 },
+    base: { dps: 18, onMs: 1400, offMs: 1200, range: 200, beams: 1 },
     commons: [
       C('dps', 3, '+DPS', '+DPS', '+20% daño/seg del rayo.', '+20% beam damage/s.'),
       C('on', 3, '+Duración on', '+On time', '+0.2s de ciclo activo.', '+0.2s active cycle.'),
@@ -166,23 +166,23 @@ export const WEAPONS = {
   drone: {
     name: { es: 'Drone de Combate', en: 'Combat Drone' },
     blurb: {
-      es: 'Dron(es) que orbitan y disparan solos al enemigo más cercano.',
-      en: 'Drone(s) that orbit and auto-fire at the nearest enemy.'
+      es: 'Dron errático con vida: embiste enemigos con el cuerpo; al morir explota y reaparece. Disparo = mejora.',
+      en: 'Erratic drone with HP: rams enemies with its body; on death it explodes and respawns. Gun = upgrade.'
     },
     type: 'kinetic',
     color: 0x9ad0ff,
     unlock: 'boss1',
-    base: { damage: 10, cooldownMs: 700, hp: 30, range: 230, respawnMs: 15000 },
+    base: { damage: 12, cooldownMs: 700, hp: 45, range: 200, respawnMs: 9000, speed: 150 },
     commons: [
-      C('dmg', 3, '+Daño', '+Damage', '+18% daño del drone.', '+18% drone damage.'),
+      C('dmg', 3, '+Daño', '+Damage', '+18% daño de embestida.', '+18% ram damage.'),
       C('count', 2, '+Drone', '+Drone', '+1 drone. Daño −20%/stack.', '+1 drone. Damage −20%/stack.', true),
       C('hp', 3, '+HP drone', '+Drone HP', '+30% vida del drone.', '+30% drone HP.'),
-      C('rate', 3, '+Cadencia', '+Fire rate', '−15% cooldown del disparo.', '−15% shot cooldown.')
+      C('speed', 3, '+Velocidad', '+Speed', '+15% velocidad de movimiento.', '+15% move speed.')
     ],
     specials: [
-      S('kamikaze', 'Kamikaze', 'Kamikaze', 'Explota al morir (AOE).', 'Explodes on death (AOE).'),
-      S('phase', 'Munición de fase', 'Phase ammo', 'Disparos pasan a energía.', 'Shots become energy type.'),
-      S('rapid', 'Sobremarcha', 'Overdrive', '−50% enfriamiento de disparo.', '−50% shot cooldown.')
+      S('gun', 'Cañón de drone', 'Drone gun', 'Además dispara al más cercano.', 'Also shoots the nearest enemy.'),
+      S('bigboom', 'Carga explosiva', 'Heavy charge', 'Explosión final ×2 (radio y daño).', 'Death blast ×2 (radius and damage).'),
+      S('phase', 'Munición de fase', 'Phase ammo', 'Disparos pasan a energía (req. Cañón).', 'Shots become energy (needs Gun).')
     ]
   },
 
@@ -197,7 +197,7 @@ export const WEAPONS = {
     type: 'kinetic',
     color: 0xa0f0ff,
     unlock: 'boss2',
-    base: { damage: 70, cooldownMs: 2200, range: 240, width: 22, crit: 0 },
+    base: { damage: 70, cooldownMs: 2200, range: 215, width: 22, crit: 0 },
     commons: [
       C('dmg', 3, '+Daño', '+Damage', '+20% daño del riel.', '+20% railgun damage.'),
       C('rate', 3, '+Cadencia', '+Fire rate', '−12% enfriamiento.', '−12% cooldown.'),

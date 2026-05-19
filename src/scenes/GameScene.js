@@ -1066,6 +1066,7 @@ export default class GameScene extends Phaser.Scene {
     this.abilityTimers.homing = (this.abilityTimers.homing || 0) + dt;
     if (this.abilityTimers.homing >= st.cooldownMs / this.abilRateMul && this.nearestEnemy(range)) {
       this.abilityTimers.homing = 0;
+      const aim0 = this.nearestEnemy(range);
       for (let i = 0; i < st.count; i++) {
         const m = this.acquire(this.missiles, CX, CY, 'tex_missile_p');
         m.setBlendMode(ADD).setDepth(4);
@@ -1073,28 +1074,32 @@ export default class GameScene extends Phaser.Scene {
         m.fission = !!st.special.fission;
         m.plasma = !!st.special.plasma;
         m.body.setCircle(5, m.width / 2 - 5, m.height / 2 - 5);
-        m.spawnAng = Phaser.Math.FloatBetween(0, Math.PI * 2);
-        m.body.setVelocity(Math.cos(m.spawnAng) * 60, Math.sin(m.spawnAng) * 60);
+        // Sale APUNTANDO al objetivo (con dispersión). Base = recto.
+        const ba = aim0 ? Math.atan2(aim0.y - CY, aim0.x - CX) : Math.random() * Math.PI * 2;
+        const ang = ba + (i - (st.count - 1) / 2) * 0.16;
+        m.body.setVelocity(Math.cos(ang) * st.speed, Math.sin(ang) * st.speed);
+        m.rotation = ang + Math.PI / 2;
         m._dieAt = this.timeSurvived + 4000;
-        m._target = null; // se fija al objetivo más cercano a sí mismo
+        m._target = null;
       }
     }
-    this.missiles.children.iterate((m) => {
-      if (!m || !m.active) return;
-      // Mantener el objetivo fijado mientras siga vivo (no cambiar de rumbo
-      // hacia uno lejano justo antes de impactar). Solo re-busca si murió.
-      let tgt = m._target;
-      if (!tgt || !tgt.active || tgt._untargetable) {
-        tgt = this.nearestEnemyToPoint(m.x, m.y);
-        m._target = tgt;
-      }
-      if (!tgt) return;
-      const desired = Math.atan2(tgt.y - m.y, tgt.x - m.x);
-      const cur = Math.atan2(m.body.velocity.y, m.body.velocity.x);
-      const next = Phaser.Math.Angle.RotateTo(cur, desired, 0.12);
-      m.body.setVelocity(Math.cos(next) * 230, Math.sin(next) * 230);
-      m.rotation = next + Math.PI / 2;
-    });
+    // Rastreo SOLO si hay stacks de "+Rastreo" (st.turn > 0); si no, recto.
+    if (st.turn > 0) {
+      this.missiles.children.iterate((m) => {
+        if (!m || !m.active) return;
+        let tgt = m._target;
+        if (!tgt || !tgt.active || tgt._untargetable) {
+          tgt = this.nearestEnemyToPoint(m.x, m.y);
+          m._target = tgt;
+        }
+        if (!tgt) return;
+        const desired = Math.atan2(tgt.y - m.y, tgt.x - m.x);
+        const cur = Math.atan2(m.body.velocity.y, m.body.velocity.x);
+        const next = Phaser.Math.Angle.RotateTo(cur, desired, st.turn);
+        m.body.setVelocity(Math.cos(next) * st.speed, Math.sin(next) * st.speed);
+        m.rotation = next + Math.PI / 2;
+      });
+    }
   }
 
   tickNova(dt) {
@@ -1266,39 +1271,100 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // -- Drone de combate (v0.7, simplificado v1: torreta orbital invulnerable) -
+  // Drone errático con vida: embiste enemigos con el cuerpo, pierde HP,
+  // explota (AOE) y reaparece. El disparo es un ESPECIAL ('gun').
   tickDrone(dt) {
     const st = this.ws('drone');
+    const now = this.timeSurvived;
     if (!this.drones) this.drones = [];
     while (this.drones.length < st.count) {
       const d = this.add
-        .image(CX, CY, 'tex_orb')
+        .image(CX + Phaser.Math.Between(-40, 40), CY, 'tex_orb')
         .setTint(0x9ad0ff)
         .setBlendMode(ADD)
-        .setScale(0.8)
+        .setScale(0.95)
         .setDepth(4);
-      d.t = 0;
-      d.idx = this.drones.length;
+      d.maxHp = st.hp;
+      d.hp = st.hp;
+      d.dead = false;
+      d.phase = Math.random() * Math.PI * 2;
+      d._gunT = 0;
+      d._hitCd = 0;
       this.drones.push(d);
     }
     while (this.drones.length > st.count) this.drones.pop().destroy();
-    this._droneAng = (this._droneAng || 0) + 1.4 * (dt / 1000);
-    const n = this.drones.length || 1;
-    this.drones.forEach((d, i) => {
-      const a = this._droneAng + (i / n) * Math.PI * 2;
-      d.x = CX + Math.cos(a) * 56;
-      d.y = CY + Math.sin(a) * 56;
-      d.t += dt;
-      if (d.t >= st.cooldownMs / this.abilRateMul) {
-        const tg = this.nearestEnemy(this.scaledRange(st.range));
-        if (tg) {
-          d.t = 0;
-          const ang = Math.atan2(tg.y - d.y, tg.x - d.x);
-          const b = this.fireBullet(ang, 420, st.damage, 0, st.special.phase ? 'energy' : 'kinetic');
-          b.setPosition(d.x, d.y);
-          b.setTint(0x9ad0ff);
+
+    const M = 14;
+    for (const d of this.drones) {
+      d.maxHp = st.hp;
+      if (d.dead) {
+        if (now >= d.respawnAt) {
+          d.dead = false;
+          d.hp = d.maxHp;
+          d.setVisible(true).setActive(true);
+          d.x = CX + Phaser.Math.Between(-40, 40);
+          d.y = CY + Phaser.Math.Between(-40, 40);
+        }
+        continue;
+      }
+      // Rumbo hacia el enemigo más cercano + bamboleo errático.
+      const tg = this.nearestEnemyToPoint(d.x, d.y);
+      let ang;
+      if (tg) ang = Math.atan2(tg.y - d.y, tg.x - d.x);
+      else ang = Math.atan2(CY - d.y, CX - d.x);
+      ang += Math.sin(now / 170 + d.phase) * 0.9 + (Math.random() - 0.5) * 0.35;
+      const sp = st.speed;
+      d.x += Math.cos(ang) * sp * (dt / 1000);
+      d.y += Math.sin(ang) * sp * (dt / 1000);
+      if (d.x < M) d.x = M;
+      else if (d.x > GAME_W - M) d.x = GAME_W - M;
+      if (d.y < M) d.y = M;
+      else if (d.y > GAME_H - M) d.y = GAME_H - M;
+      d.rotation += 6 * (dt / 1000);
+
+      // Embestida: daña a un enemigo en contacto y pierde HP.
+      if (now >= d._hitCd) {
+        let hit = null;
+        this.enemies.children.iterate((e) => {
+          if (hit || !e || !e.active || e._untargetable) return;
+          if (Math.hypot(e.x - d.x, e.y - d.y) < 26) hit = e;
+        });
+        if (hit) {
+          this.damageEnemy(hit, st.damage, 'kinetic');
+          d.hp -= Math.max(2, d.maxHp * 0.18);
+          d._hitCd = now + 180;
+          this.spawnDeathFx(d.x, d.y, 0x9ad0ff);
         }
       }
-    });
+
+      // Explota al quedarse sin HP y reaparece tras respawnMs.
+      if (d.hp <= 0) {
+        const big = !!st.special.bigboom;
+        this.plasmaField(d.x, d.y, st.damage * (big ? 6 : 3), 'kinetic', big ? 80 : 52);
+        this.sfx?.play('explosion');
+        d.dead = true;
+        d.respawnAt = now + st.respawnMs;
+        d.setVisible(false).setActive(false);
+        continue;
+      }
+
+      // ESPECIAL "Cañón de drone": además dispara al más cercano.
+      if (st.special.gun) {
+        d._gunT += dt;
+        if (d._gunT >= st.cooldownMs / this.abilRateMul) {
+          const t2 = this.nearestEnemyToPoint(d.x, d.y);
+          if (t2) {
+            d._gunT = 0;
+            const ga = Math.atan2(t2.y - d.y, t2.x - d.x);
+            const b = this.fireBullet(
+              ga, 420, st.damage, 0, st.special.phase ? 'energy' : 'kinetic'
+            );
+            b.setPosition(d.x, d.y);
+            b.setTint(0x9ad0ff);
+          }
+        }
+      }
+    }
   }
 
   // -- Agujero Negro (v0.7): atrae y daña en zona, con cooldown -------------

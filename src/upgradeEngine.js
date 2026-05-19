@@ -101,8 +101,9 @@ export function weaponStats(wid, st) {
       out.damage = b.damage * (1 + 0.18 * S('dmg')) * qm;
       out.cooldownMs = b.cooldownMs * Math.pow(0.85, S('rate'));
       out.count = b.count + S('count') + (sp('swarm') ? 2 : 0);
-      out.range = b.range * (1 + 0.25 * S('range'));
-      out.turn = b.turn;
+      out.range = b.range;
+      // Base = recto (turn 0). Cada stack de "+Rastreo" suma giro.
+      out.turn = b.turn * S('track');
       out.speed = b.speed;
       break;
     case 'orbital':
@@ -136,7 +137,8 @@ export function weaponStats(wid, st) {
       out.damage = b.damage * (1 + 0.18 * S('dmg')) * qm;
       out.count = 1 + S('count');
       out.hp = Math.round(b.hp * (1 + 0.3 * S('hp')));
-      out.cooldownMs = b.cooldownMs * Math.pow(0.85, S('rate')) * (sp('rapid') ? 0.5 : 1);
+      out.speed = b.speed * (1 + 0.15 * S('speed'));
+      out.cooldownMs = b.cooldownMs; // cadencia del cañón (especial 'gun')
       out.range = b.range;
       out.respawnMs = b.respawnMs;
       break;
