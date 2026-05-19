@@ -5,6 +5,7 @@ import GameScene from './scenes/GameScene.js';
 import UIScene from './scenes/UIScene.js';
 import AbilitiesScene from './scenes/AbilitiesScene.js';
 import LevelsScene from './scenes/LevelsScene.js';
+import CreditsScene from './scenes/CreditsScene.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -25,7 +26,7 @@ const config = {
     arcade: { gravity: { x: 0, y: 0 }, debug: false }
   },
   render: { antialias: true, pixelArt: false },
-  scene: [MenuScene, GameScene, UIScene, AbilitiesScene, LevelsScene]
+  scene: [MenuScene, GameScene, UIScene, AbilitiesScene, LevelsScene, CreditsScene]
 };
 
 // eslint-disable-next-line no-new

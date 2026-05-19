@@ -1,7 +1,10 @@
 // ---------------------------------------------------------------------------
-// Campaña: 1 enemigo nuevo por nivel (acumulativo).
-//   Nv1 = [tipo1] · Nv2 = [tipo1,tipo2] · ... y un nivel final con el JEFE.
-// Dificultad escala suave con n. Textos de nombre vienen de i18n.
+// Campaña: 1 enemigo nuevo por nivel (acumulativo). Dos JEFES fijos:
+//   · Nivel 5  = Jefe 1 (al vencerlo se desbloquea el Drone).
+//   · Nivel 10 = Jefe 2 (al vencerlo se desbloquea el Agujero Negro).
+// Los niveles de jefe NO presentan enemigo nuevo. El resto introduce un tipo
+// en orden. Total = 14 tipos + 2 niveles de jefe = 16 niveles.
+// La cuota X = exactamente X enemigos aparecen (sin spawn infinito).
 // ---------------------------------------------------------------------------
 import { t } from '../i18n.js';
 import { enemyName } from './enemies.js';
@@ -24,22 +27,36 @@ const ORDER = [
   'carrier'
 ];
 
-const BOSS_LEVEL = ORDER.length + 1; // último nivel = todos + jefe
+// Niveles de jefe (1-based).
+const BOSS_LEVELS = new Set([5, 10]);
+const TOTAL_LEVELS = ORDER.length + BOSS_LEVELS.size; // 16
 
 function makeLevel(n) {
-  const isBoss = n === BOSS_LEVEL;
-  const introduced = isBoss ? 'boss_core' : ORDER[n - 1];
-  const pool = isBoss ? [...ORDER] : ORDER.slice(0, n);
+  const isBoss = BOSS_LEVELS.has(n);
+  // Índice del tipo nuevo: cuenta solo niveles que NO son de jefe.
+  let introIdx = 0;
+  for (let k = 1; k < n; k++) if (!BOSS_LEVELS.has(k)) introIdx++;
+  const introduced = isBoss ? 'boss_core' : ORDER[introIdx];
+  // Pool acumulado: todos los tipos introducidos hasta aquí.
+  const pool = [];
+  for (let k = 1; k <= n; k++) {
+    if (BOSS_LEVELS.has(k)) continue;
+    let idx = 0;
+    for (let j = 1; j < k; j++) if (!BOSS_LEVELS.has(j)) idx++;
+    if (ORDER[idx] && !pool.includes(ORDER[idx])) pool.push(ORDER[idx]);
+  }
   return {
     n,
     col: n % 2 === 0 ? 1 : 0, // zigzag del mapa estelar
     introduced,
     pool,
     boss: isBoss ? 'boss_core' : null,
-    targetKills: Math.round(16 + n * 7),
+    // Cuota = enemigos que aparecen en total (exacta). Crece con el stage.
+    targetKills: Math.round(40 + n * 16),
     hpMul: +(0.7 + (n - 1) * 0.07).toFixed(3),
     speedMul: +(0.8 + (n - 1) * 0.035).toFixed(3),
-    spawnMul: +(0.6 + (n - 1) * 0.06).toFixed(3),
+    // Densidad: ARRANCA baja en Nv1 y sube claramente por stage.
+    spawnMul: +(0.8 + (n - 1) * 0.13).toFixed(3),
     rampMul: +(0.45 + (n - 1) * 0.06).toFixed(3),
     get name() {
       return isBoss
@@ -50,6 +67,6 @@ function makeLevel(n) {
 }
 
 export const LEVELS = [];
-for (let n = 1; n <= BOSS_LEVEL; n++) LEVELS.push(makeLevel(n));
+for (let n = 1; n <= TOTAL_LEVELS; n++) LEVELS.push(makeLevel(n));
 
 export const LEVEL_BY_N = Object.fromEntries(LEVELS.map((l) => [l.n, l]));

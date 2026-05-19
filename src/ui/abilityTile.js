@@ -1,15 +1,17 @@
 // ---------------------------------------------------------------------------
-// Tile vertical sci-fi reutilizable. Dos usos:
-//   - draft  : tarjeta de opción en la "cinta" de subir de nivel (icono, nombre,
-//              badge de nivel, descripción y track de pips). Interactiva.
-//   - grid   : cuadro compacto del codex (icono, nombre, pie de potencia).
+// Tile vertical arcade reutilizable (Direction C — Arcade Neon).
+// Dos usos:
+//   - draft  : tarjeta de opción en la "cinta" de subir de nivel.
+//   - grid   : cuadro compacto del codex.
 // ---------------------------------------------------------------------------
 import Phaser from 'phaser';
 import { Sfx } from '../sfx.js';
+import { drawModuleIcon } from './icons.js';
 
 const ADD = Phaser.BlendModes.ADD;
-const FONT = '"Courier New", ui-monospace, monospace';
-const GOLD = 0xffd76a;
+const FONT = '"Pixelify Sans", "VT323", ui-monospace, monospace';
+const FONT_DATA = '"VT323", "Pixelify Sans", ui-monospace, monospace';
+const GOLD = 0xffe640;
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 
 const toPts = (flat) => {
@@ -22,35 +24,44 @@ export function buildTile(scene, o) {
   const { cx, cy, w, h, color, name } = o;
   const hw = w / 2;
   const hh = h / 2;
-  const cut = Math.min(16, w * 0.16);
   const tile = scene.add.container(cx, cy);
-  const shape = toPts([-hw, -hh, hw - cut, -hh, hw, -hh + cut, hw, hh, -hw, hh]);
 
   const glow = scene.add
     .image(0, 0, 'tex_glow')
     .setTint(color)
     .setBlendMode(ADD)
-    .setAlpha(0.18)
-    .setScale(w / 14, h / 14);
+    .setAlpha(0.32)
+    .setScale(w / 12, h / 12);
 
   const g = scene.add.graphics();
   const paint = (fillA, lineA) => {
     g.clear();
-    g.fillStyle(0x081521, fillA);
-    g.fillPoints(shape, true);
-    g.lineStyle(2, color, lineA);
-    g.strokePoints(shape, true);
+    // Fondo púrpura profundo
+    g.fillStyle(0x1c0d34, fillA);
+    g.fillRect(-hw, -hh, w, h);
+    // Borde chunky 3px
+    g.lineStyle(3, color, lineA);
+    g.strokeRect(-hw, -hh, w, h);
+    // Highlight superior
+    g.lineStyle(1, 0xffffff, lineA * 0.35);
+    g.lineBetween(-hw + 3, -hh + 3, hw - 3, -hh + 3);
+    // Esquinas pixel
+    g.fillStyle(color, lineA);
+    g.fillRect(-hw, -hh, 7, 7);
+    g.fillRect(hw - 7, -hh, 7, 7);
+    g.fillRect(-hw, hh - 7, 7, 7);
+    g.fillRect(hw - 7, hh - 7, 7, 7);
   };
-  paint(0.92, 0.9);
+  paint(0.94, 0.95);
 
   const kids = [glow, g];
 
-  // Ícono hexagonal
-  const iconR = Math.min(22, w * 0.2);
-  const iconY = -hh + iconR + 16;
+  // Hexágono + glifo distintivo del módulo (para identificarlo rápido)
+  const iconR = Math.min(o.compact ? 19 : 26, w * (o.compact ? 0.16 : 0.22));
+  const iconY = -hh + iconR + (o.compact ? 12 : 18);
   const icon = scene.add.graphics();
-  icon.fillStyle(color, 0.18);
-  icon.lineStyle(2, color, 0.95);
+  icon.fillStyle(color, 0.16);
+  icon.lineStyle(3, color, 1);
   const ip = [];
   for (let k = 0; k < 6; k++) {
     const a = (k / 6) * Math.PI * 2 - Math.PI / 2;
@@ -58,58 +69,68 @@ export function buildTile(scene, o) {
   }
   icon.fillPoints(ip, true);
   icon.strokePoints(ip, true);
+  if (o.icon) drawModuleIcon(icon, o.icon, 0, iconY, iconR * 0.52, color);
   kids.push(icon);
 
-  const nameY = iconY + iconR + 14;
-  kids.push(
-    scene.add
-      .text(0, nameY, name, {
-        fontFamily: FONT,
-        fontSize: o.compact ? '13px' : '15px',
-        color: hex(color),
-        fontStyle: 'bold',
-        align: 'center',
-        wordWrap: { width: w - 16 }
-      })
-      .setOrigin(0.5, 0)
-  );
+  const nameY = iconY + iconR + (o.compact ? 8 : 16);
+  const nameTxt = scene.add
+    .text(0, nameY, name, {
+      fontFamily: FONT,
+      fontSize: o.compact ? '14px' : '20px',
+      color: hex(color),
+      fontStyle: 'bold',
+      align: 'center',
+      lineSpacing: o.compact ? 0 : 2,
+      wordWrap: { width: w - (o.compact ? 12 : 16) }
+    })
+    .setOrigin(0.5, 0);
+  kids.push(nameTxt);
+
+  // Layout dinámico: todo cuelga DEBAJO del nombre real (que puede ocupar
+  // 1 o 2 líneas), nunca a un offset fijo (evita que el badge pise el nombre).
+  let cursorY = nameY + nameTxt.height + (o.compact ? 6 : 12);
 
   if (o.badge) {
     const prem = /PREMIUM|ESPECIAL/.test(o.badge);
-    kids.push(
-      scene.add
-        .text(0, nameY + 32, `[ ${o.badge} ]`, {
-          fontFamily: FONT,
-          fontSize: '11px',
-          color: prem ? hex(GOLD) : '#7fb8cf',
-          fontStyle: 'bold'
-        })
-        .setOrigin(0.5, 0)
-    );
+    const badgeTxt = scene.add
+      .text(0, cursorY, `[ ${o.badge} ]`, {
+        fontFamily: FONT_DATA,
+        fontSize: '15px',
+        color: prem ? hex(GOLD) : '#c084ff',
+        fontStyle: 'bold',
+        align: 'center',
+        wordWrap: { width: w - 14 }
+      })
+      .setOrigin(0.5, 0);
+    kids.push(badgeTxt);
+    cursorY += badgeTxt.height + 10;
   }
 
   if (o.body) {
     kids.push(
       scene.add
-        .text(0, nameY + (o.badge ? 54 : 30), o.body, {
-          fontFamily: FONT,
-          fontSize: '12px',
-          color: '#dfe9f7',
+        .text(0, cursorY, o.body, {
+          fontFamily: FONT_DATA,
+          fontSize: '16px',
+          color: '#ffffff',
           align: 'center',
           wordWrap: { width: w - 22 },
-          lineSpacing: 3
+          lineSpacing: 4
         })
         .setOrigin(0.5, 0)
     );
   }
 
   if (o.footer) {
+    // Compacto: justo debajo del nombre (sin solaparse aunque envuelva 2
+    // líneas). Draft: anclado abajo.
+    const fy = o.compact ? nameTxt.y + nameTxt.height + 6 : hh - 26;
     kids.push(
       scene.add
-        .text(0, hh - 22, o.footer, {
-          fontFamily: FONT,
-          fontSize: '11px',
-          color: o.footerColor || '#7fb8cf',
+        .text(0, fy, o.footer, {
+          fontFamily: FONT_DATA,
+          fontSize: o.compact ? '12px' : '15px',
+          color: o.footerColor || '#c084ff',
           align: 'center'
         })
         .setOrigin(0.5, 0)
@@ -118,20 +139,20 @@ export function buildTile(scene, o) {
 
   // Track de progresión: 3 barras + 3 diamantes ★ (encendidos = level-1).
   if (o.level != null) {
-    const py = hh - 16;
+    const py = hh - 18;
     const litN = Phaser.Math.Clamp(o.level - 1, 0, 6);
-    const startX = -((3 - 1) * 20 + 3 * 16) / 2; // centra el bloque de barras
+    const startX = -((3 - 1) * 20 + 3 * 16) / 2;
     for (let i = 0; i < 6; i++) {
       const lit = i < litN;
       if (i < 3) {
         kids.push(
           scene.add
-            .rectangle(startX + i * 22, py, 16, 5, color, lit ? 0.95 : 0.22)
+            .rectangle(startX + i * 22, py, 18, 6, color, lit ? 1 : 0.25)
             .setOrigin(0, 0.5)
         );
       } else {
         const dx = startX + 66 + (i - 3) * 18;
-        const dia = scene.add.rectangle(dx, py, 10, 10, GOLD, lit ? 1 : 0.22).setAngle(45);
+        const dia = scene.add.rectangle(dx, py, 11, 11, GOLD, lit ? 1 : 0.25).setAngle(45);
         if (lit) dia.setBlendMode(ADD);
         kids.push(dia);
       }
@@ -145,12 +166,14 @@ export function buildTile(scene, o) {
       .rectangle(0, 0, w, h, 0xffffff, 0)
       .setInteractive({ useHandCursor: true });
     zone.on('pointerover', () => {
-      paint(0.97, 1);
-      glow.setAlpha(0.34);
+      paint(0.98, 1);
+      glow.setAlpha(0.55);
+      scene.tweens.add({ targets: tile, scaleX: 1.03, scaleY: 1.03, duration: 120, ease: 'Back.out' });
     });
     zone.on('pointerout', () => {
-      paint(0.92, 0.9);
-      glow.setAlpha(0.18);
+      paint(0.94, 0.95);
+      glow.setAlpha(0.32);
+      scene.tweens.add({ targets: tile, scaleX: 1, scaleY: 1, duration: 120, ease: 'Back.out' });
     });
     zone.on('pointerdown', () => {
       Sfx.play('ui');
@@ -160,12 +183,12 @@ export function buildTile(scene, o) {
   }
 
   if (o.popDelay >= 0) {
-    tile.setScale(0.86).setAlpha(0);
+    tile.setScale(0.82).setAlpha(0);
     scene.tweens.add({
       targets: tile,
       scale: 1,
       alpha: 1,
-      duration: 280,
+      duration: 320,
       delay: o.popDelay,
       ease: 'Back.out'
     });
@@ -173,3 +196,4 @@ export function buildTile(scene, o) {
 
   return tile;
 }
+

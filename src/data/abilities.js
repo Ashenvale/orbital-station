@@ -79,16 +79,22 @@ const RAW = [
   {
     id: 'laser_beam',
     color: 0xff4f86,
+    // Daño MUCHO menor + ciclo de trabajo (onMs activo / offMs apagado).
     levels: [
-      { dps: 30, range: 260, pierceAll: false, beams: 1 },
-      { dps: 46, range: 300, pierceAll: false, beams: 1 },
-      { dps: 66, range: 340, pierceAll: false, beams: 1 },
-      { dps: 92, range: 380, pierceAll: false, beams: 1 },
-      { dps: 110, range: 420, pierceAll: true, beams: 1 },
-      { dps: 140, range: 460, pierceAll: true, beams: 2 },
-      { dps: 190, range: 9999, pierceAll: true, beams: 3 }
+      { dps: 16, onMs: 1200, offMs: 1500, range: 260, pierceAll: false, beams: 1 },
+      { dps: 20, onMs: 1300, offMs: 1300, range: 300, pierceAll: false, beams: 1 },
+      { dps: 26, onMs: 1400, offMs: 1200, range: 340, pierceAll: false, beams: 1 },
+      { dps: 34, onMs: 1500, offMs: 1100, range: 380, pierceAll: false, beams: 1 },
+      { dps: 42, onMs: 1600, offMs: 1000, range: 420, pierceAll: true, beams: 1 },
+      { dps: 54, onMs: 1800, offMs: 900, range: 460, pierceAll: true, beams: 2 },
+      { dps: 72, onMs: 2200, offMs: 700, range: 9999, pierceAll: true, beams: 3 }
     ],
-    P: (s) => ({ d: s.dps, r: s.range })
+    P: (s) => ({
+      d: s.dps,
+      r: s.range,
+      on: (s.onMs / 1000).toFixed(1),
+      off: (s.offMs / 1000).toFixed(1)
+    })
   },
   {
     id: 'regen_shield',

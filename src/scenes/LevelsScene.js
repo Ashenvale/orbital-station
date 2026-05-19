@@ -6,9 +6,11 @@ import { createBackdrop } from '../backdrop.js';
 import { buildButton } from '../ui/button.js';
 import { Sfx } from '../sfx.js';
 import { t } from '../i18n.js';
+import { Music } from '../music.js';
 
 const ADD = Phaser.BlendModes.ADD;
-const FONT = '"Courier New", ui-monospace, monospace';
+const FONT = '"Pixelify Sans", "VT323", ui-monospace, monospace';
+const FONT_DATA = '"VT323", "Pixelify Sans", ui-monospace, monospace';
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 
 export default class LevelsScene extends Phaser.Scene {
@@ -17,6 +19,7 @@ export default class LevelsScene extends Phaser.Scene {
   }
 
   create() {
+    Music.stop();
     this.backdrop = createBackdrop(this, { nebula: true });
     const cx = GAME_W / 2;
     const UI = 100;
@@ -82,12 +85,18 @@ export default class LevelsScene extends Phaser.Scene {
     m.fillRect(0, listTop, GAME_W, listH);
     this.mapC.setMask(m.createGeometryMask());
 
+    // Anti-bug: ignora el pointerup heredado de la pulsación que ABRIÓ esta
+    // escena (la del botón "NIVELES" del menú). Solo "armamos" la selección
+    // tras un pointerdown nuevo, hecho ya dentro de este mapa.
+    this._armed = false;
+
     // Scroll: rueda + arrastre.
     this.input.on('wheel', (p, go, dx, dy) => this.applyScroll(-dy));
     let dragging = false;
     let lastY = 0;
     let movedY = 0;
     this.input.on('pointerdown', (p) => {
+      this._armed = true;
       if (p.y > listTop && p.y < listBottom) {
         dragging = true;
         lastY = p.y;
@@ -185,9 +194,19 @@ export default class LevelsScene extends Phaser.Scene {
       const zone = this.add
         .circle(x, y, 26, 0xffffff, 0)
         .setInteractive({ useHandCursor: true });
+      const gA = glow.alpha;
+      zone.on('pointerover', () => {
+        Sfx.play('hover');
+        this.tweens.add({ targets: glow, alpha: Math.min(1, gA + 0.35), duration: 140 });
+      });
+      zone.on('pointerout', () =>
+        this.tweens.add({ targets: glow, alpha: gA, duration: 140 })
+      );
       zone.on('pointerup', () => {
+        if (!this._armed) return; // pointerup heredado del menú: ignorar
         if (this._wasDrag && this._wasDrag()) return; // era scroll
-        Sfx.play('ui');
+        Sfx.play('select');
+        this.cameras.main.flash(120, 60, 180, 255);
         this.scene.start('GameScene', { level: l.n });
       });
       add.push(zone);

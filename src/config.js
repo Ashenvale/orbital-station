@@ -13,23 +13,23 @@ export const GAME_H = 854;
 // habilidad ni upgrade puede superar esto.
 export const MAX_RANGE = Math.round(Math.min(GAME_W, GAME_H) / 2) - 10; // 230
 
-// Paleta holografica: cian/teal dominante, acentos de neon.
+// Paleta Arcade Neon: púrpura profundo + cian + magenta + amarillo.
 export const COLORS = {
-  bg: 0x02030a,
-  grid: 0x0e3a52,
-  nebula: 0x123a6b,
-  station: 0x49e8ff,
-  stationCore: 0xeaffff,
-  shield: 0x49f2c2,
-  bullet: 0x9ff6ff,
-  missile: 0xff9d5c,
-  orb: 0xc792ff,
-  laser: 0xff4f86,
-  nova: 0x6fe3ff,
-  xp: 0x7affc4,
-  enemyAsteroid: 0x7fd0c0,
-  enemyMissile: 0xff6b6b,
-  enemyShip: 0x6fb3ff
+  bg: 0x10081f,
+  grid: 0x3a1268,
+  nebula: 0x3a1268,
+  station: 0x00f0ff,
+  stationCore: 0xffffff,
+  shield: 0x5bffb8,
+  bullet: 0xc8faff,
+  missile: 0xff8a3d,
+  orb: 0xc084ff,
+  laser: 0xff2bd6,
+  nova: 0x00f0ff,
+  xp: 0xffe640,
+  enemyAsteroid: 0xffb547,
+  enemyMissile: 0xff3a5e,
+  enemyShip: 0xff7ad9
 };
 
 export const STATION = {

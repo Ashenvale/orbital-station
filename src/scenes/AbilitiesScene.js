@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_W, GAME_H, COLORS } from '../config.js';
-import { ABILITIES, ROMAN } from '../data/abilities.js';
+import { WEAPONS, WEAPON_IDS, wname, tx } from '../data/upgrades.js';
+import { isUnlocked } from '../upgradeEngine.js';
 import { SHIP_MODULES } from '../data/shipmods.js';
 import { createBackdrop } from '../backdrop.js';
 import { buildButton } from '../ui/button.js';
@@ -8,10 +9,12 @@ import { buildTile } from '../ui/abilityTile.js';
 import { Economy, MAX_POWER } from '../economy.js';
 import { Sfx } from '../sfx.js';
 import { t } from '../i18n.js';
+import { Music } from '../music.js';
 
 const ADD = Phaser.BlendModes.ADD;
-const FONT = '"Courier New", ui-monospace, monospace';
-const GOLD = '#ffd76a';
+const FONT = '"Pixelify Sans", "VT323", ui-monospace, monospace';
+const FONT_DATA = '"VT323", "Pixelify Sans", ui-monospace, monospace';
+const GOLD = '#ffe640';
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 const toPts = (flat) => {
   const o = [];
@@ -25,6 +28,7 @@ export default class AbilitiesScene extends Phaser.Scene {
   }
 
   create() {
+    Music.stop();
     this.backdrop = createBackdrop(this, { nebula: false });
     const cx = GAME_W / 2;
     const UI = 100;
@@ -61,7 +65,7 @@ export default class AbilitiesScene extends Phaser.Scene {
     const gap = 12;
     const cols = 3;
     const tileW = (GAME_W - margin * 2 - gap * (cols - 1)) / cols;
-    const tileH = 126;
+    const tileH = 132;
     const UId = UI;
 
     const placeTile = (d, isShip, cxk, cyk) => {
@@ -73,6 +77,7 @@ export default class AbilitiesScene extends Phaser.Scene {
         h: tileH,
         color: d.color,
         name: d.name,
+        icon: d.id,
         compact: true,
         footer: isShip
           ? lv > 0
@@ -108,14 +113,26 @@ export default class AbilitiesScene extends Phaser.Scene {
     const sec2Y = ship1 + blockH(SHIP_MODULES.length) + 20;
     this.sectionHeader(sec2Y, t('ui.sec_weapons'), hex(COLORS.station), UI);
     const arm1 = sec2Y + 22;
-    ABILITIES.forEach((a, i) =>
-      placeTile(
-        a,
-        false,
-        colX(i % cols),
-        arm1 + tileH / 2 + Math.floor(i / cols) * (tileH + gap)
-      )
-    );
+    const bosses = parseInt(localStorage.getItem('os_bosses') || '0', 10) || 0;
+    WEAPON_IDS.forEach((wid, i) => {
+      const W = WEAPONS[wid];
+      const locked = !isUnlocked(wid, bosses);
+      buildTile(this, {
+        cx: colX(i % cols),
+        cy: arm1 + tileH / 2 + Math.floor(i / cols) * (tileH + gap),
+        w: tileW,
+        h: tileH,
+        color: locked ? 0x556070 : W.color,
+        name: wname(wid),
+        icon: wid,
+        compact: true,
+        footer: locked
+          ? t('ui.wpn_lock', { n: W.unlock === 'boss2' ? 2 : 1 })
+          : t('ui.wpn_run'),
+        footerColor: locked ? '#6f7d8c' : '#7fb8cf',
+        onClick: () => this.openWeaponDetail(wid, locked)
+      }).setDepth(UId);
+    });
 
     buildButton(this, cx, GAME_H - 42, 200, 50, t('ui.back'), COLORS.station, () => {
       this.scene.start('MenuScene');
@@ -136,20 +153,22 @@ export default class AbilitiesScene extends Phaser.Scene {
   }
 
   // ===========================================================================
-  //  Modal de detalle de una habilidad
+  //  Modal de detalle de un ARMA (catálogo de solo lectura, motor v0.7).
+  //  Las armas ya no se compran con oro: se consiguen en el draft por partida.
   // ===========================================================================
-  openDetail(a) {
+  openWeaponDetail(wid, locked) {
+    const W = WEAPONS[wid];
+    const color = locked ? 0x6f7d8c : W.color;
     this.detailLayer.removeAll(true);
     this.detailLayer.setVisible(true);
 
     const cx = GAME_W / 2;
     const cy = GAME_H / 2;
     const w = GAME_W - 40;
-    const h = 420;
+    const h = 460;
     const hw = w / 2;
     const hh = h / 2;
 
-    // Fondo oscuro: tocar fuera cierra.
     const dim = this.add
       .rectangle(0, 0, GAME_W, GAME_H, 0x02030a, 0.86)
       .setOrigin(0, 0)
@@ -162,116 +181,98 @@ export default class AbilitiesScene extends Phaser.Scene {
     const shape = toPts([-hw, -hh, hw - cut, -hh, hw, -hh + cut, hw, hh, -hw, hh]);
     const glow = this.add
       .image(0, 0, 'tex_glow')
-      .setTint(a.color)
+      .setTint(color)
       .setBlendMode(ADD)
-      .setAlpha(0.18)
+      .setAlpha(0.16)
       .setScale(w / 12, h / 18);
     const g = this.add.graphics();
     g.fillStyle(0x081521, 0.97);
     g.fillPoints(shape, true);
-    g.lineStyle(2, a.color, 0.95);
+    g.lineStyle(2, color, 0.95);
     g.strokePoints(shape, true);
 
-    // Ícono + nombre
-    const icon = this.add.graphics();
-    icon.fillStyle(a.color, 0.18);
-    icon.lineStyle(2, a.color, 0.95);
-    const ip = [];
-    for (let k = 0; k < 6; k++) {
-      const ang = (k / 6) * Math.PI * 2 - Math.PI / 2;
-      ip.push(new Phaser.Math.Vector2(-hw + 34 + Math.cos(ang) * 15, -hh + 34 + Math.sin(ang) * 15));
-    }
-    icon.fillPoints(ip, true);
-    icon.strokePoints(ip, true);
-
-    const kids = [glow, g, icon];
+    const kids = [glow, g];
     kids.push(
-      this.add.text(-hw + 60, -hh + 18, a.name, {
+      this.add.text(-hw + 22, -hh + 16, wname(wid), {
         fontFamily: FONT,
         fontSize: '20px',
-        color: hex(a.color),
+        color: hex(color),
         fontStyle: 'bold'
       })
     );
     kids.push(
-      this.add.text(-hw + 60, -hh + 44, a.blurb, {
-        fontFamily: FONT,
-        fontSize: '12px',
-        color: '#aecbe0',
-        wordWrap: { width: w - 80 }
-      })
+      this.add
+        .text(hw - 20, -hh + 18, `[ ${t('dmg.' + W.type)} ]`, {
+          fontFamily: FONT,
+          fontSize: '12px',
+          color: '#9fb6d6',
+          fontStyle: 'bold'
+        })
+        .setOrigin(1, 0)
     );
 
-    const sepY = -hh + 88;
-    const sep = this.add.graphics();
-    sep.lineStyle(1, a.color, 0.3);
-    sep.lineBetween(-hw + 20, sepY, hw - 20, sepY);
-    kids.push(sep);
+    let yy = -hh + 48;
+    if (locked) {
+      kids.push(
+        this.add.text(-hw + 22, yy, t('ui.wpn_lock', { n: W.unlock === 'boss2' ? 2 : 1 }), {
+          fontFamily: FONT,
+          fontSize: '12px',
+          color: '#ffb37a'
+        })
+      );
+      yy += 24;
+    }
     kids.push(
-      this.add.text(-hw + 20, sepY + 8, t('ui.specials_h'), {
+      this.add.text(-hw + 22, yy, t('ui.upgrades_h'), {
         fontFamily: FONT,
         fontSize: '10px',
         color: GOLD
       })
     );
-    a.specials.forEach((sp, idx) => {
-      const y = sepY + 26 + idx * 40;
+    yy += 18;
+    W.commons.forEach((c) => {
       kids.push(
-        this.add.rectangle(-hw + 26, y + 8, 10, 10, 0xffd76a, 1).setAngle(45).setBlendMode(ADD)
-      );
-      kids.push(
-        this.add.text(-hw + 42, y, `${ROMAN[idx]}  ${sp}`, {
+        this.add.text(-hw + 22, yy, `${tx(c.nm)}  (×${c.max})  —  ${tx(c.ds)}`, {
           fontFamily: FONT,
-          fontSize: '12px',
-          color: '#e7f3ff',
-          wordWrap: { width: w - 80 }
+          fontSize: '11px',
+          color: '#cfeefb',
+          wordWrap: { width: w - 44 }
         })
       );
+      yy += 28;
     });
-
-    // -- Potencia permanente -----------------------------------------------
-    const lv = Economy.powerLevel(a.id);
-    const pwY = hh - 78;
-    const pdiv = this.add.graphics();
-    pdiv.lineStyle(1, a.color, 0.25);
-    pdiv.lineBetween(-hw + 20, pwY - 10, hw - 20, pwY - 10);
-    kids.push(pdiv);
+    yy += 8;
     kids.push(
-      this.add.text(-hw + 20, pwY, t('ui.power_row', { n: lv, m: MAX_POWER, p: lv * 12 }), {
+      this.add.text(-hw + 22, yy, t('ui.tag_special'), {
         fontFamily: FONT,
-        fontSize: '13px',
-        color: lv > 0 ? GOLD : '#aecbe0'
+        fontSize: '10px',
+        color: GOLD
       })
     );
-
-    const max = Economy.isMax(a.id);
-    const cost = Economy.cost(a.id);
-    const afford = !max && Economy.gold() >= cost;
-    const upBtn = this.add
-      .rectangle(0, hh - 46, w - 56, 34, 0x0c1f2b, 0.95)
-      .setStrokeStyle(2, max ? 0x44546a : afford ? 0xffd76a : 0x7a6a3a, 0.9);
-    const upTx = this.add
-      .text(0, hh - 46, max ? t('ui.power_max') : t('ui.upg_dmg', { c: cost }), {
-        fontFamily: FONT,
-        fontSize: '14px',
-        color: max ? '#7f8fa0' : afford ? '#ffe9a8' : '#9a8b5a',
-        fontStyle: 'bold'
-      })
-      .setOrigin(0.5);
-    kids.push(upBtn, upTx);
-    if (!max) {
-      upBtn.setInteractive({ useHandCursor: true });
-      upBtn.on('pointerdown', () => {
-        if (Economy.buyPower(a.id)) {
-          Sfx.play('levelup');
-          this.afterBuy();
-          this.openDetail(a); // la card NO se cierra: se refresca
-        } else {
-          Sfx.play('hit');
-          upBtn.setStrokeStyle(2, 0xff6b7d, 0.9);
-        }
-      });
-    }
+    yy += 18;
+    W.specials.forEach((sp) => {
+      kids.push(
+        this.add.rectangle(-hw + 28, yy + 7, 10, 10, 0xffd76a, 1).setAngle(45).setBlendMode(ADD)
+      );
+      kids.push(
+        this.add.text(-hw + 44, yy, `${tx(sp.nm)}  —  ${tx(sp.ds)}`, {
+          fontFamily: FONT,
+          fontSize: '11px',
+          color: '#e7f3ff',
+          wordWrap: { width: w - 64 }
+        })
+      );
+      yy += 30;
+    });
+    kids.push(
+      this.add
+        .text(0, hh - 28, t('ui.wpn_run'), {
+          fontFamily: FONT,
+          fontSize: '12px',
+          color: '#7fb8cf'
+        })
+        .setOrigin(0.5)
+    );
 
     const close = this.add
       .text(hw - 20, -hh + 16, '✕', {

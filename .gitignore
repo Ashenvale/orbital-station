@@ -1,4 +1,7 @@
 node_modules/
 dist/
 *.zip
+releases/
 .DS_Store
+# mp3 suelto en raíz (la copia buena vive en public/music/)
+/Futuristic*.mp3

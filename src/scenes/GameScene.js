@@ -10,13 +10,22 @@ import {
   MAX_RANGE
 } from '../config.js';
 import { ENEMY_CATALOG, enemyName, enemyInfoText } from '../data/enemies.js';
-import { resistMul, resistSummary } from '../data/enemyInfo.js';
+import { resistMul, resistSummary, weaknessColor } from '../data/enemyInfo.js';
 import { t } from '../i18n.js';
-import { ABILITY_BY_ID, ABILITIES, MAX_LEVEL, levelLabel } from '../data/abilities.js';
 import { ensureTextures, STATION_TEX_PAD } from '../gfxTextures.js';
 import { createBackdrop } from '../backdrop.js';
 import { Sfx } from '../sfx.js';
+import { Music } from '../music.js';
 import { LEVEL_BY_N } from '../data/levels.js';
+import { WEAPONS, WEAPON_IDS, tx, cardMeta, wname } from '../data/upgrades.js';
+import {
+  newUpgState,
+  weaponStats,
+  applyUpg,
+  draftPool,
+  occupiesSlot,
+  isUnlocked
+} from '../upgradeEngine.js';
 import { Economy } from '../economy.js';
 import {
   shipDamageMul,
@@ -53,10 +62,14 @@ export default class GameScene extends Phaser.Scene {
   create() {
     ensureTextures(this);
     this.sfx = Sfx;
+    Music.play(); // música de fondo durante el modo de juego
 
     // -- Modo: campaña (level) o arcade infinito (endless) -------------------
     const data = this.scene.settings.data || {};
     this.levelData = data;
+    // Tutorial breve solo la primerísima vez (no en reintentos del Nv1).
+    this.tutorial = !!data.tutorial && localStorage.getItem('os_tut') !== '1';
+    if (this.tutorial) localStorage.setItem('os_tut', '1');
     if (data.level && LEVEL_BY_N[data.level]) {
       const L = LEVEL_BY_N[data.level];
       this.mode = 'level';
@@ -85,9 +98,14 @@ export default class GameScene extends Phaser.Scene {
     }
     this.paused = false;
     this._won = false;
+    this._winPending = false;
     this._bossSpawned = false;
     this._goldBanked = false;
     this._seenTypes = new Set(); // tipos ya presentados (card) en esta partida
+    // -- Sistema de upgrades v0.7 -------------------------------------------
+    this.up = newUpgState();
+    this.up.cannon.owned = true; // el cañón base dispara desde el segundo 0
+    this.bossCount = parseInt(localStorage.getItem('os_bosses') || '0', 10) || 0;
 
     // -- Módulos permanentes de la nave (comprados con oro) -----------------
     this.abilRateMul = shipAtkSpdMul(Economy.powerLevel('sh_atkspd'));
@@ -105,21 +123,27 @@ export default class GameScene extends Phaser.Scene {
     this.level = 1;
     this.xp = 0;
     this.kills = 0;
+    this.spawned = 0; // enemigos generados (tope = targetKills en campaña)
     this.gold = 0;
     this.timeSurvived = 0;
     this.pendingLevelUps = 0;
     this.drafting = false;
-    this.abilities = {};
 
     this.backdrop = createBackdrop(this, { nebula: true });
     this.buildStation();
 
-    // -- Grupos de fisicas ---------------------------------------------------
+    // -- Grupos de fisicas (con reciclaje: ver acquire/kill) -----------------
     this.enemies = this.physics.add.group();
     this.bullets = this.physics.add.group();
     this.missiles = this.physics.add.group();
     this.orbsGroup = this.physics.add.group();
+    // Pools de FX (Text/Image) reutilizables — evitan GC en cada golpe/muerte.
+    this._dnPool = []; // damage numbers
+    this._glowPool = []; // glows de muerte / plasma
     this.orbs = [];
+    this.drones = []; // dron(es) v0.7 (se reconstruyen por nivel)
+    this._bh = null; // agujero negro activo
+    this.bhGfx = null;
 
     this.laserGfx = this.add.graphics().setDepth(6).setBlendMode(ADD);
     this.enemyBars = this.add.graphics().setDepth(7); // barras de vida sobre enemigos
@@ -136,32 +160,51 @@ export default class GameScene extends Phaser.Scene {
     this._firstSpawn = true;
     this.abilityTimers = {};
 
+    // Tutorial in-game: NO se pausa. Las burbujas-coach aparecen sobre el
+    // juego en marcha (UIScene.tutStart, disparadas por eventos reales).
+
     if (!this.scene.isActive('UIScene')) this.scene.launch('UIScene');
     this.events.emit('reset');
   }
 
   buildStation() {
-    // Halo pulsante
+    // Halo pulsante (arcade: doble halo cian + magenta)
     this.stationHalo = this.add
       .image(CX, CY, 'tex_glow')
       .setTint(COLORS.station)
       .setBlendMode(ADD)
-      .setScale(2.6)
-      .setAlpha(0.45)
+      .setScale(3.2)
+      .setAlpha(0.55)
       .setDepth(2);
     this.tweens.add({
       targets: this.stationHalo,
-      scale: 3.1,
-      alpha: 0.65,
+      scale: 3.8,
+      alpha: 0.75,
       duration: 1400,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.inOut'
     });
+    this.stationHaloMag = this.add
+      .image(CX, CY, 'tex_glow')
+      .setTint(COLORS.laser)
+      .setBlendMode(ADD)
+      .setScale(2.2)
+      .setAlpha(0.3)
+      .setDepth(2);
+    this.tweens.add({
+      targets: this.stationHaloMag,
+      scale: 2.8,
+      alpha: 0.5,
+      duration: 1700,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.inOut'
+    });
 
-    // Anillo de modulos con marcas (gira)
+    // Anillo de modulos con marcas (gira) — más grueso arcade
     this.moduleRing = this.add.graphics().setDepth(3);
-    this.moduleRing.lineStyle(1.5, COLORS.station, 0.5);
+    this.moduleRing.lineStyle(2, COLORS.station, 0.7);
     this.moduleRing.strokeCircle(0, 0, STATION.radius + 16);
     for (let i = 0; i < 16; i++) {
       const a = (i / 16) * Math.PI * 2;
@@ -207,7 +250,7 @@ export default class GameScene extends Phaser.Scene {
     g.clear();
     const ratio = Phaser.Math.Clamp(this.hp / this.maxHp, 0, 1);
     const R = STATION.radius + 30;
-    const col = ratio > 0.5 ? 0x49f2c2 : ratio > 0.25 ? 0xffc14f : 0xff5d6c;
+    const col = ratio > 0.5 ? 0x5bffb8 : ratio > 0.25 ? 0xffe640 : 0xff3a5e;
     const segs = 44;
     const full = (Math.PI * 2) / segs;
     const gap = full * 0.28;
@@ -218,7 +261,7 @@ export default class GameScene extends Phaser.Scene {
       const a0 = top + i * full + gap / 2;
       const a1 = top + (i + 1) * full - gap / 2;
       const on = i < lit;
-      g.lineStyle(on ? 3 : 2, on ? col : 0x33485c, on ? 0.95 : 0.22);
+      g.lineStyle(on ? 4 : 2, on ? col : 0x3a1268, on ? 1 : 0.35);
       g.beginPath();
       g.arc(0, 0, R, a0, a1, false);
       g.strokePath();
@@ -260,9 +303,13 @@ export default class GameScene extends Phaser.Scene {
 
     this.timeSurvived += dt;
 
-    if (this.mode === 'level' && !this._won && this.kills >= this.targetKills) {
-      this.levelClear();
-      return;
+    // Fin de nivel (solo niveles SIN jefe; los de jefe terminan al matarlo):
+    //  - se cumplió la cuota de bajas, o
+    //  - ya aparecieron los X enemigos y no queda ninguno vivo.
+    if (this.mode === 'level' && !this._won && !this.bossId) {
+      const allCleared =
+        this.spawned >= this.targetKills && this.enemies.countActive(true) === 0;
+      if (this.kills >= this.targetKills || allCleared) this.triggerWin();
     }
 
     const step = this.difficultyStep();
@@ -311,13 +358,20 @@ export default class GameScene extends Phaser.Scene {
     const g = this.enemyBars;
     g.clear();
     this.enemies.children.iterate((e) => {
-      if (!e || !e.active || e.hp >= e.maxHp) return;
+      if (!e || !e.active) return;
+      const top = e.y - e.displayHeight / 2;
+      // Aura de debilidad: punto del color del tipo que más le hace daño.
+      if (!e.flags || !e.flags.boss) {
+        g.fillStyle(weaknessColor(e.enemyType), 0.95);
+        g.fillCircle(e.x, top - 13, 3);
+      }
+      if (e.hp >= e.maxHp) return;
       const ratio = Phaser.Math.Clamp(e.hp / e.maxHp, 0, 1);
       const w = 26;
       const x = e.x - w / 2;
-      const y = e.y - (e.displayHeight / 2) - 9;
-      const col = ratio > 0.5 ? 0x7affc4 : ratio > 0.25 ? 0xffc14f : 0xff5d6c;
-      g.fillStyle(0x02030a, 0.7);
+      const y = top - 7;
+      const col = ratio > 0.5 ? 0x5bffb8 : ratio > 0.25 ? 0xffe640 : 0xff3a5e;
+      g.fillStyle(0x10081f, 0.85);
       g.fillRect(x - 1, y - 1, w + 2, 5);
       g.fillStyle(col, 1);
       g.fillRect(x, y, w * ratio, 3);
@@ -334,21 +388,86 @@ export default class GameScene extends Phaser.Scene {
     return this.scaledRange(STATION.baseWeapon.range);
   }
 
-  // Multiplicador de daño permanente comprado con oro.
-  pmul(id) {
-    return Economy.powerMul(id);
+  // v0.7: el daño de las armas viene del draft, no del oro. Shim neutro.
+  pmul() {
+    return 1;
+  }
+
+  // Stats efectivos de un arma (motor v0.7).
+  ws(id) {
+    return weaponStats(id, this.up);
   }
 
   // Los proyectiles no "vuelan al infinito": se eliminan al salir de pantalla.
   cullProjectiles() {
     const m = 24;
+    const now = this.timeSurvived;
     const cull = (grp) =>
       grp.children.iterate((p) => {
         if (!p || !p.active) return;
-        if (p.x < -m || p.x > GAME_W + m || p.y < -m || p.y > GAME_H + m) p.destroy();
+        const out = p.x < -m || p.x > GAME_W + m || p.y < -m || p.y > GAME_H + m;
+        if (out || (p._dieAt && now >= p._dieAt)) this.kill(p);
       });
     cull(this.bullets);
     cull(this.missiles);
+  }
+
+  // ---------------------------------------------------------------------------
+  //  RECICLAJE / POOLING
+  //  Reusamos sprites en vez de crear+destruir (menos GC, más fluido).
+  //  acquire = saca uno muerto del grupo o crea; kill = lo "guarda" inactivo.
+  // ---------------------------------------------------------------------------
+  acquire(group, x, y, key) {
+    let o = group.getFirstDead(false);
+    if (o) {
+      o.setTexture(key);
+      o.enableBody(true, x, y, true, true);
+    } else {
+      o = group.create(x, y, key);
+    }
+    o.setActive(true).setVisible(true).setAngle(0).setScale(1).setAlpha(1).clearTint();
+    return o;
+  }
+
+  kill(o) {
+    if (!o || !o.active) return;
+    o.disableBody(true, true); // inactivo + oculto + body off (queda en el pool)
+  }
+
+  // Texto flotante reutilizable.
+  getText() {
+    const t = this._dnPool.pop();
+    if (t) {
+      this.tweens.killTweensOf(t);
+      t.setActive(true).setVisible(true).setAlpha(1).setScale(1);
+      return t;
+    }
+    return this.add
+      .text(0, 0, '', { fontFamily: '"Pixelify Sans", "VT323", monospace' })
+      .setDepth(20);
+  }
+
+  freeText(t) {
+    this.tweens.killTweensOf(t);
+    t.setActive(false).setVisible(false);
+    this._dnPool.push(t);
+  }
+
+  // Glow (tex_glow) reutilizable para FX de muerte / plasma.
+  getGlow() {
+    const g = this._glowPool.pop();
+    if (g) {
+      this.tweens.killTweensOf(g);
+      g.setActive(true).setVisible(true);
+      return g;
+    }
+    return this.add.image(0, 0, 'tex_glow').setBlendMode(ADD);
+  }
+
+  freeGlow(g) {
+    this.tweens.killTweensOf(g);
+    g.setActive(false).setVisible(false);
+    this._glowPool.push(g);
   }
 
   drawRangeRing(r) {
@@ -365,25 +484,16 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  // Armas (no base) que tienen un rango/alcance que mostrar en pantalla.
+  // Anillos de alcance de las armas equipadas (motor v0.7).
   weaponRanges() {
     const out = [];
-    const A = this.abilities;
-    const push = (id, range) =>
-      out.push({ id, range, color: ABILITY_BY_ID[id].color });
-    if (A.dual_cannon)
-      push('dual_cannon', this.scaledRange(ABILITY_BY_ID.dual_cannon.levels[A.dual_cannon - 1].range));
-    if (A.homing_missiles)
-      push(
-        'homing_missiles',
-        this.scaledRange(ABILITY_BY_ID.homing_missiles.levels[A.homing_missiles - 1].range)
-      );
-    if (A.laser_beam)
-      push('laser_beam', this.scaledRange(ABILITY_BY_ID.laser_beam.levels[A.laser_beam - 1].range));
-    if (A.nova_pulse)
-      push('nova_pulse', Math.min(MAX_RANGE, ABILITY_BY_ID.nova_pulse.levels[A.nova_pulse - 1].radius));
-    if (A.orbital_ring)
-      push('orbital_ring', ABILITY_BY_ID.orbital_ring.levels[A.orbital_ring - 1].radius);
+    const add = (id, range) => out.push({ id, range, color: WEAPONS[id].color });
+    if (this.up.missiles.owned)
+      add('missiles', this.scaledRange(this.ws('missiles').range));
+    if (this.up.laser.owned) add('laser', this.scaledRange(this.ws('laser').range));
+    if (this.up.nova.owned) add('nova', Math.min(MAX_RANGE, this.ws('nova').radius));
+    if (this.up.orbital.owned) add('orbital', this.ws('orbital').radius);
+    if (this.up.blackhole.owned) add('blackhole', this.ws('blackhole').radius);
     return out;
   }
 
@@ -424,6 +534,8 @@ export default class GameScene extends Phaser.Scene {
   //  ENEMIGOS
   // ===========================================================================
   updateSpawner(dt, step) {
+    // Campaña: aparecen EXACTAMENTE targetKills enemigos (sin spawn infinito).
+    if (this.mode === 'level' && this.spawned >= this.targetKills) return;
     this.spawnT += dt;
     const interval =
       Math.max(
@@ -495,6 +607,8 @@ export default class GameScene extends Phaser.Scene {
         }
       });
     }
+
+    this.spawned += created.length; // cuenta para el tope de la campaña
   }
 
   makeEnemy(type, x, y, step) {
@@ -524,11 +638,19 @@ export default class GameScene extends Phaser.Scene {
         });
       }
     }
-    const e = this.enemies.create(x, y, `tex_e_${type}`);
-    e.setBlendMode(ADD);
+    const e = this.acquire(this.enemies, x, y, `tex_e_${type}`);
+    e.setBlendMode(ADD).setDepth(3);
     e.enemyType = type;
     e.flags = def.flags || {};
     e.move = def.move;
+    // Reset de estado por si viene reciclado del pool.
+    e._shieldedUntil = 0;
+    e._shieldMul = 1;
+    e._distortUntil = 0;
+    e._poisonEnd = 0;
+    e._poisonDps = 0;
+    e._untargetable = false;
+    e._heldUntil = 0;
     const grow = e.flags.boss ? 1 : Math.pow(DIFFICULTY.enemyHpGrowth, step);
     e.maxHp = Math.round(def.hp * grow * this.lvlMul.hp);
     e.hp = e.maxHp;
@@ -682,52 +804,41 @@ export default class GameScene extends Phaser.Scene {
   //  ARMA COMÚN (cañón base de la estación; NO es Cañón Múltiple)
   //  Solo la mejora la PASIVA de nave (Cañón Principal), no las de habilidades.
   // ===========================================================================
+  // Cañón base (motor v0.7): siempre activo. Comunes: +daño/+cadencia/
+  // +proyectil/+crítico. Especiales: explosivo / perforación.
   updateBaseWeapon(dt) {
+    const st = this.ws('cannon');
     this.baseWeaponT += dt;
-    const bw = STATION.baseWeapon;
-    const cooldown = bw.cooldownMs / this.shipRateMul;
-    if (this.baseWeaponT < cooldown) return;
-
-    const target = this.nearestEnemy(this.baseRange());
+    if (this.baseWeaponT < st.cooldownMs / this.shipRateMul) return;
+    const target = this.nearestEnemy(this.scaledRange(st.range));
     if (!target) return;
     this.baseWeaponT = 0;
 
-    const damage = bw.damage * this.shipDmgMul; // pasiva = solo arma común
-    const ang = Math.atan2(target.y - CY, target.x - CX);
-    this.fireBullet(ang, bw.projectileSpeed, damage, 0);
-    this.sfx?.play('shoot');
-  }
-
-  // Cañón Múltiple: arma EXTRA independiente (su propio bucle/alcance/daño).
-  tickDualCannon(dt, s) {
-    this.abilityTimers.dual = (this.abilityTimers.dual || 0) + dt;
-    if (this.abilityTimers.dual < s.cooldownMs / this.abilRateMul) return;
-    const range = this.scaledRange(s.range);
-    const target = this.nearestEnemy(range);
-    if (!target) return;
-    this.abilityTimers.dual = 0;
-
-    const damage = s.damage * this.pmul('dual_cannon');
+    let damage = st.damage * this.shipDmgMul;
+    if (st.crit > 0 && Math.random() < st.crit) damage *= 2;
+    const n = st.projectiles;
     const baseAng = Math.atan2(target.y - CY, target.x - CX);
-    const spread = Phaser.Math.DegToRad(8);
-    for (let i = 0; i < s.projectiles; i++) {
-      const offset = (i - (s.projectiles - 1) / 2) * spread;
-      const b = this.fireBullet(baseAng + offset, 460, damage, s.pierce);
-      b.setTint(0xfff07a);
+    const spread = Phaser.Math.DegToRad(7);
+    for (let i = 0; i < n; i++) {
+      const off = (i - (n - 1) / 2) * spread;
+      const b = this.fireBullet(baseAng + off, st.bulletSpeed, damage, st.pierce, 'kinetic');
+      b.explode = !!st.special.explosive;
     }
     this.sfx?.play('shoot');
   }
 
   fireBullet(angle, speed, damage, pierce, type = 'kinetic') {
-    const b = this.bullets.create(CX, CY, 'tex_bullet');
+    const b = this.acquire(this.bullets, CX, CY, 'tex_bullet');
     b.setBlendMode(ADD).setDepth(4).setScale(0.9);
     b.damage = damage;
     b.pierce = pierce;
     b.dmgType = type;
-    b._hit = new Set();
+    b.explode = false;
+    if (b._hit) b._hit.clear();
+    else b._hit = new Set();
     b.body.setCircle(4, b.width / 2 - 4, b.height / 2 - 4);
     b.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
-    this.time.delayedCall(2600, () => b.active && b.destroy());
+    b._dieAt = this.timeSurvived + 2600; // auto-reciclaje (ver cullProjectiles)
     return b;
   }
 
@@ -736,107 +847,154 @@ export default class GameScene extends Phaser.Scene {
   // ===========================================================================
   updateAbilities(dt) {
     this.laserGfx.clear();
-
-    for (const id of Object.keys(this.abilities)) {
-      const lv = this.abilities[id];
-      const s = ABILITY_BY_ID[id].levels[lv - 1];
-      if (id === 'dual_cannon') this.tickDualCannon(dt, s);
-      else if (id === 'homing_missiles') this.tickHomingMissiles(dt, s);
-      else if (id === 'nova_pulse') this.tickNova(dt, s);
-      else if (id === 'laser_beam') this.tickLaser(dt, s);
-      else if (id === 'regen_shield') this.tickShield(dt, s);
-    }
+    const U = this.up;
+    if (U.missiles.owned) this.tickMissiles(dt);
+    if (U.nova.owned) this.tickNova(dt);
+    if (U.laser.owned) this.tickLaser(dt);
+    if (U.shield.owned) this.tickShield(dt);
+    if (U.drone.owned) this.tickDrone(dt);
+    if (U.blackhole.owned) this.tickBlackhole(dt);
     this.updateOrbs(dt);
   }
 
-  tickHomingMissiles(dt, s) {
-    const range = this.scaledRange(s.range);
+  tickMissiles(dt) {
+    const st = this.ws('missiles');
+    const range = this.scaledRange(st.range);
     this.abilityTimers.homing = (this.abilityTimers.homing || 0) + dt;
-    // Solo lanza si hay un objetivo dentro del alcance del modulo.
-    if (this.abilityTimers.homing >= s.cooldownMs / this.abilRateMul && this.nearestEnemy(range)) {
+    if (this.abilityTimers.homing >= st.cooldownMs / this.abilRateMul && this.nearestEnemy(range)) {
       this.abilityTimers.homing = 0;
-      for (let i = 0; i < s.count; i++) {
-        const m = this.missiles.create(CX, CY, 'tex_missile_p');
+      for (let i = 0; i < st.count; i++) {
+        const m = this.acquire(this.missiles, CX, CY, 'tex_missile_p');
         m.setBlendMode(ADD).setDepth(4);
-        m.damage = s.damage * this.pmul('homing_missiles');
-        m.splits = s.splits;
-        m.field = s.field;
+        m.damage = st.damage;
+        m.fission = !!st.special.fission;
+        m.plasma = !!st.special.plasma;
         m.body.setCircle(5, m.width / 2 - 5, m.height / 2 - 5);
         m.spawnAng = Phaser.Math.FloatBetween(0, Math.PI * 2);
         m.body.setVelocity(Math.cos(m.spawnAng) * 60, Math.sin(m.spawnAng) * 60);
-        this.time.delayedCall(4000, () => m.active && m.destroy());
+        m._dieAt = this.timeSurvived + 4000;
+        m._target = null; // se fija al objetivo más cercano a sí mismo
       }
     }
     this.missiles.children.iterate((m) => {
       if (!m || !m.active) return;
-      const t = this.nearestEnemy(range);
-      if (!t) return;
-      const desired = Math.atan2(t.y - m.y, t.x - m.x);
+      // Mantener el objetivo fijado mientras siga vivo (no cambiar de rumbo
+      // hacia uno lejano justo antes de impactar). Solo re-busca si murió.
+      let tgt = m._target;
+      if (!tgt || !tgt.active || tgt._untargetable) {
+        tgt = this.nearestEnemyToPoint(m.x, m.y);
+        m._target = tgt;
+      }
+      if (!tgt) return;
+      const desired = Math.atan2(tgt.y - m.y, tgt.x - m.x);
       const cur = Math.atan2(m.body.velocity.y, m.body.velocity.x);
       const next = Phaser.Math.Angle.RotateTo(cur, desired, 0.12);
-      const sp = 230;
-      m.body.setVelocity(Math.cos(next) * sp, Math.sin(next) * sp);
+      m.body.setVelocity(Math.cos(next) * 230, Math.sin(next) * 230);
       m.rotation = next + Math.PI / 2;
     });
   }
 
-  tickNova(dt, s) {
+  tickNova(dt) {
+    const st = this.ws('nova');
     this.abilityTimers.nova = (this.abilityTimers.nova || 0) + dt;
-    if (this.abilityTimers.nova < s.cooldownMs / this.abilRateMul) return;
+    if (this.abilityTimers.nova < st.cooldownMs / this.abilRateMul) return;
     this.abilityTimers.nova = 0;
-
-    this.novaBlast(s);
-    if (s.double) this.time.delayedCall(260, () => this.running && this.novaBlast(s));
+    for (let w = 0; w < st.waves; w++)
+      this.time.delayedCall(w * 220, () => this.running && this.novaBlast(st));
   }
 
-  novaBlast(s) {
+  novaBlast(st) {
     this.sfx?.play('nova');
-    const radius = Math.min(MAX_RANGE, s.radius);
+    const radius = Math.min(MAX_RANGE, st.radius);
     const ring = this.add
       .circle(CX, CY, STATION.radius, COLORS.nova, 0)
       .setStrokeStyle(3, COLORS.nova, 0.95)
       .setBlendMode(ADD)
       .setDepth(6);
-    this.tweens.add({
-      targets: ring,
-      radius,
-      alpha: 0,
-      duration: 420,
-      onComplete: () => ring.destroy()
-    });
-
-    const dmg = s.damage * this.pmul('nova_pulse');
+    this.tweens.add({ targets: ring, radius, alpha: 0, duration: 420, onComplete: () => ring.destroy() });
     this.enemies.children.iterate((e) => {
       if (!e || !e.active) return;
       if (Math.hypot(e.x - CX, e.y - CY) <= radius) {
-        if (s.slowMs) e.slowUntil = this.timeSurvived + s.slowMs;
-        this.damageEnemy(e, dmg, 'energy');
+        if (st.special.frost) e.slowUntil = this.timeSurvived + 1800;
+        if (st.special.poison) {
+          e._poisonEnd = this.timeSurvived + 4000;
+          e._poisonDps = 5;
+        }
+        this.damageEnemy(e, st.damage, 'elemental');
       }
     });
   }
 
-  tickLaser(dt, s) {
-    const beams = s.beams || 1;
-    const dps = s.dps * this.pmul('laser_beam');
-    const range = this.scaledRange(s.range);
-    if (s.pierceAll) {
-      const inRange = [];
-      this.enemies.children.iterate((e) => {
-        if (!e || !e.active) return;
-        const d = Math.hypot(e.x - CX, e.y - CY);
-        if (d <= range) {
-          this.damageEnemy(e, dps * (dt / 1000), 'laser');
-          inRange.push({ e, d });
-        }
-      });
-      inRange.sort((a, b) => a.d - b.d);
-      for (let i = 0; i < Math.min(beams, inRange.length); i++) this.drawLaser(inRange[i].e, 4);
+  tickLaser(dt) {
+    const st = this.ws('laser');
+    const range = this.scaledRange(st.range);
+    this.abilityTimers.laser = (this.abilityTimers.laser || 0) + dt;
+    if (this.abilityTimers.laser % (st.onMs + st.offMs) >= st.onMs) return; // OFF
+    const tick = st.dps * (dt / 1000);
+    const inRange = [];
+    this.enemies.children.iterate((e) => {
+      if (!e || !e.active || e._untargetable) return;
+      const d = Math.hypot(e.x - CX, e.y - CY);
+      if (d <= range) inRange.push({ e, d });
+    });
+    if (!inRange.length) return;
+    inRange.sort((a, b) => a.d - b.d);
+    if (st.special.pierceall) {
+      // Rayo RECTO que apunta al más cercano y atraviesa a TODOS los que
+      // estén sobre esa línea (no un círculo): "perforación total".
+      const aim = inRange[0].e;
+      const ang = Math.atan2(aim.y - CY, aim.x - CX);
+      const ux = Math.cos(ang);
+      const uy = Math.sin(ang);
+      const ex = CX + ux * range;
+      const ey = CY + uy * range;
+      for (const { e } of inRange) {
+        const t = (e.x - CX) * ux + (e.y - CY) * uy; // proyección sobre el rayo
+        if (t < 0 || t > range) continue;
+        const perp = Math.abs((e.x - CX) * uy - (e.y - CY) * ux);
+        if (perp <= 24) this.damageEnemy(e, tick, 'energy');
+      }
+      this.drawLaserSeg(CX, CY, ex, ey, 5); // haz largo y visible
       return;
     }
-    const t = this.nearestEnemy(range);
-    if (!t) return;
-    this.damageEnemy(t, dps * (dt / 1000), 'laser');
-    this.drawLaser(t, 3);
+    // Haces independientes a daño pleno (base 1, +1 con el especial "Doble").
+    // Cada haz, además, REFRACTA: salta de su objetivo a otro cercano con
+    // daño decreciente (0.6^k) — tantos saltos como stacks de "+Refracción".
+    const lit = new Set();
+    const beams = Math.min(inRange.length, st.beams);
+    for (let bI = 0; bI < beams; bI++) {
+      let cur = inRange[bI].e;
+      if (lit.has(cur)) continue;
+      lit.add(cur);
+      this.damageEnemy(cur, tick, 'energy');
+      this.drawLaser(cur, 3); // estación -> objetivo (haz pleno)
+      for (let k = 1; k <= st.refract; k++) {
+        let best = null;
+        let bd = Infinity;
+        this.enemies.children.iterate((e) => {
+          if (!e || !e.active || e._untargetable || lit.has(e)) return;
+          const d = (e.x - cur.x) ** 2 + (e.y - cur.y) ** 2;
+          if (d < bd) {
+            bd = d;
+            best = e;
+          }
+        });
+        if (!best) break;
+        lit.add(best);
+        this.damageEnemy(best, tick * Math.pow(0.6, k), 'energy');
+        this.drawLaserSeg(cur.x, cur.y, best.x, best.y, 2); // salto
+        cur = best;
+      }
+    }
+  }
+
+  drawLaserSeg(x1, y1, x2, y2, width) {
+    this.laserGfx.lineStyle(width + 4, COLORS.laser, 0.22);
+    this.laserGfx.lineBetween(x1, y1, x2, y2);
+    this.laserGfx.lineStyle(width, COLORS.laser, 0.9);
+    this.laserGfx.lineBetween(x1, y1, x2, y2);
+    this.laserGfx.fillStyle(0xffffff, 0.8);
+    this.laserGfx.fillCircle(x2, y2, width);
   }
 
   drawLaser(t, width) {
@@ -848,24 +1006,106 @@ export default class GameScene extends Phaser.Scene {
     this.laserGfx.fillCircle(t.x, t.y, width);
   }
 
-  tickShield(dt, s) {
-    this.shieldMax = Math.round(s.shieldMax * this.pmul('regen_shield'));
-    if (this.shield < this.shieldMax) {
-      this.shield = Math.min(this.shieldMax, this.shield + s.regenPerSec * (dt / 1000));
-    }
+  tickShield(dt) {
+    const st = this.ws('shield');
+    this.shieldMax = st.shieldMax;
+    this.shieldResist = st.resist || 0;
+    this._thorns = !!st.special.thorns;
+    this._absorb = !!st.special.absorb;
+    if (this.shield < this.shieldMax)
+      this.shield = Math.min(this.shieldMax, this.shield + st.regenPerSec * (dt / 1000));
     const ratio = this.shieldMax > 0 ? this.shield / this.shieldMax : 0;
     this.shieldFx.setFillStyle(COLORS.shield, 0.05 + ratio * 0.2);
     this.shieldFx.setStrokeStyle(1.5, COLORS.shield, 0.2 + ratio * 0.6);
     this.shieldFx.setRadius(STATION.radius + 10 + ratio * 5);
   }
 
+  // -- Drone de combate (v0.7, simplificado v1: torreta orbital invulnerable) -
+  tickDrone(dt) {
+    const st = this.ws('drone');
+    if (!this.drones) this.drones = [];
+    while (this.drones.length < st.count) {
+      const d = this.add
+        .image(CX, CY, 'tex_orb')
+        .setTint(0x9ad0ff)
+        .setBlendMode(ADD)
+        .setScale(0.8)
+        .setDepth(4);
+      d.t = 0;
+      d.idx = this.drones.length;
+      this.drones.push(d);
+    }
+    while (this.drones.length > st.count) this.drones.pop().destroy();
+    this._droneAng = (this._droneAng || 0) + 1.4 * (dt / 1000);
+    const n = this.drones.length || 1;
+    this.drones.forEach((d, i) => {
+      const a = this._droneAng + (i / n) * Math.PI * 2;
+      d.x = CX + Math.cos(a) * 56;
+      d.y = CY + Math.sin(a) * 56;
+      d.t += dt;
+      if (d.t >= st.cooldownMs / this.abilRateMul) {
+        const tg = this.nearestEnemy(this.scaledRange(st.range));
+        if (tg) {
+          d.t = 0;
+          const ang = Math.atan2(tg.y - d.y, tg.x - d.x);
+          const b = this.fireBullet(ang, 420, st.damage, 0, st.special.phase ? 'energy' : 'kinetic');
+          b.setPosition(d.x, d.y);
+          b.setTint(0x9ad0ff);
+        }
+      }
+    });
+  }
+
+  // -- Agujero Negro (v0.7): atrae y daña en zona, con cooldown -------------
+  tickBlackhole(dt) {
+    const st = this.ws('blackhole');
+    if (!this.bhGfx) this.bhGfx = this.add.graphics().setDepth(5).setBlendMode(ADD);
+    this.abilityTimers.bh = (this.abilityTimers.bh || 0) + dt;
+    if (!this._bh && this.abilityTimers.bh >= st.cooldownMs) {
+      const tg = this.nearestEnemy(this.scaledRange(MAX_RANGE));
+      if (tg) {
+        this.abilityTimers.bh = 0;
+        this._bh = { x: tg.x, y: tg.y, end: this.timeSurvived + st.durationMs };
+      }
+    }
+    this.bhGfx.clear();
+    if (!this._bh) return;
+    const bh = this._bh;
+    if (this.timeSurvived >= bh.end) {
+      if (st.special.implosion)
+        this.enemies.children.iterate((e) => {
+          if (e && e.active && Math.hypot(e.x - bh.x, e.y - bh.y) < st.radius)
+            this.damageEnemy(e, st.dps * 1.5, 'gravity');
+        });
+      this._bh = null;
+      return;
+    }
+    // Visual
+    this.bhGfx.fillStyle(0xb36bff, 0.18);
+    this.bhGfx.fillCircle(bh.x, bh.y, st.radius);
+    this.bhGfx.fillStyle(0x10081f, 0.9);
+    this.bhGfx.fillCircle(bh.x, bh.y, 10);
+    this.bhGfx.lineStyle(2, 0xb36bff, 0.8);
+    this.bhGfx.strokeCircle(bh.x, bh.y, st.radius);
+    this.enemies.children.iterate((e) => {
+      if (!e || !e.active) return;
+      const dx = bh.x - e.x;
+      const dy = bh.y - e.y;
+      const d = Math.hypot(dx, dy) || 1;
+      if (d < st.radius) {
+        e.body.setVelocity((dx / d) * st.pull, (dy / d) * st.pull); // atracción
+        if (st.special.distort) e._distortUntil = this.timeSurvived + 200;
+        this.damageEnemy(e, st.dps * (dt / 1000), 'gravity');
+      }
+    });
+  }
+
   rebuildOrbs() {
     this.orbs.forEach((o) => o.destroy());
     this.orbs = [];
-    const lv = this.abilities.orbital_ring;
-    if (!lv) return;
-    const s = ABILITY_BY_ID.orbital_ring.levels[lv - 1];
-    for (let i = 0; i < s.orbs; i++) {
+    if (!this.up.orbital.owned) return;
+    const st = this.ws('orbital');
+    for (let i = 0; i < st.orbs; i++) {
       const o = this.orbsGroup.create(CX, CY, 'tex_orb');
       o.setBlendMode(ADD).setDepth(4);
       o.body.setCircle(7, o.width / 2 - 7, o.height / 2 - 7);
@@ -876,15 +1116,15 @@ export default class GameScene extends Phaser.Scene {
   }
 
   updateOrbs(dt) {
-    const lv = this.abilities.orbital_ring;
-    if (!lv) return;
-    const s = ABILITY_BY_ID.orbital_ring.levels[lv - 1];
-    this._orbBaseAng = (this._orbBaseAng || 0) + s.speed * (dt / 1000);
+    if (!this.up.orbital.owned) return;
+    const st = this.ws('orbital');
+    if (this.orbs.length !== st.orbs) this.rebuildOrbs();
+    this._orbBaseAng = (this._orbBaseAng || 0) + st.speed * (dt / 1000);
     const n = this.orbs.length;
     this.orbs.forEach((o, i) => {
       const a = this._orbBaseAng + (i / n) * Math.PI * 2;
-      o.x = CX + Math.cos(a) * s.radius;
-      o.y = CY + Math.sin(a) * s.radius;
+      o.x = CX + Math.cos(a) * st.radius;
+      o.y = CY + Math.sin(a) * st.radius;
     });
   }
 
@@ -895,32 +1135,31 @@ export default class GameScene extends Phaser.Scene {
     if (!bullet.active || !enemy.active || bullet._hit.has(enemy)) return;
     bullet._hit.add(enemy);
     this.damageEnemy(enemy, bullet.damage, bullet.dmgType);
+    if (bullet.explode) this.plasmaField(bullet.x, bullet.y, bullet.damage, 'kinetic', 40);
     if (bullet.pierce > 0) bullet.pierce--;
-    else bullet.destroy();
+    else this.kill(bullet);
   }
 
   onMissileHit(missile, enemy) {
     if (!missile.active || !enemy.active) return;
     this.sfx?.play('hit');
     this.damageEnemy(enemy, missile.damage, 'explosive');
-    if (missile.splits > 0) {
-      for (let i = 0; i < missile.splits; i++) {
-        const a = (i / missile.splits) * Math.PI * 2;
+    if (missile.fission) {
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2;
         const frag = this.fireBullet(a, 260, missile.damage * 0.5, 0, 'explosive');
         frag.setPosition(missile.x, missile.y);
       }
     }
-    if (missile.field) this.plasmaField(missile.x, missile.y, missile.damage);
-    missile.destroy();
+    if (missile.plasma) this.plasmaZone(missile.x, missile.y, missile.damage, 64);
+    this.kill(missile);
   }
 
-  // ESPECIAL III misiles: zona de plasma que daña al impactar.
-  plasmaField(x, y, dmg) {
-    const R = 56;
-    const fx = this.add
-      .image(x, y, 'tex_glow')
-      .setTint(COLORS.missile)
-      .setBlendMode(ADD)
+  plasmaField(x, y, dmg, type = 'explosive', R = 56) {
+    const fx = this.getGlow();
+    fx
+      .setPosition(x, y)
+      .setTint(type === 'kinetic' ? 0xfff07a : COLORS.missile)
       .setAlpha(0.5)
       .setScale(0.2)
       .setDepth(5);
@@ -928,27 +1167,72 @@ export default class GameScene extends Phaser.Scene {
       targets: fx,
       scale: (R * 2) / 64,
       alpha: 0,
-      duration: 520,
-      onComplete: () => fx.destroy()
+      duration: 480,
+      onComplete: () => this.freeGlow(fx)
     });
     this.enemies.children.iterate((e) => {
-      if (e && e.active && Math.hypot(e.x - x, e.y - y) < R) this.damageEnemy(e, dmg * 0.7, 'explosive');
+      if (e && e.active && Math.hypot(e.x - x, e.y - y) < R) this.damageEnemy(e, dmg * 0.7, type);
     });
+  }
+
+  // Campo de plasma del misil (ESPECIAL): zona que PERMANECE ~1.4s y daña por
+  // tiempo (no un fogonazo). Disco translúcido con latido suave + anillo.
+  plasmaZone(x, y, dmg, R) {
+    const sc = (R * 2) / 64;
+    const disc = this.getGlow();
+    disc
+      .setPosition(x, y)
+      .setTint(COLORS.missile)
+      .setBlendMode(ADD)
+      .setDepth(5)
+      .setAlpha(0.34)
+      .setScale(sc * 0.92);
+    // Latido lento (queda "vivo" como zona, no explota).
+    this.tweens.add({
+      targets: disc,
+      scale: sc * 1.05,
+      duration: 380,
+      yoyo: true,
+      repeat: 3,
+      ease: 'Sine.inOut'
+    });
+    const ring = this.add
+      .circle(x, y, R, COLORS.missile, 0)
+      .setStrokeStyle(2, COLORS.missile, 0.5)
+      .setBlendMode(ADD)
+      .setDepth(5);
+    // Daño por tiempo: 6 ticks suaves a lo largo de ~1.4s.
+    let ticks = 6;
+    const tick = () => {
+      this.enemies.children.iterate((e) => {
+        if (e && e.active && Math.hypot(e.x - x, e.y - y) < R)
+          this.damageEnemy(e, dmg * 0.32, 'elemental');
+      });
+      if (--ticks > 0) {
+        this.time.delayedCall(230, tick);
+      } else {
+        this.tweens.add({
+          targets: [disc, ring],
+          alpha: 0,
+          duration: 280,
+          onComplete: () => {
+            ring.destroy();
+            this.freeGlow(disc);
+          }
+        });
+      }
+    };
+    tick();
   }
 
   onOrbHit(orb, enemy) {
     if (!enemy.active || this.timeSurvived < enemy._orbCdUntil) return;
     enemy._orbCdUntil = this.timeSurvived + 230;
-    const lv = this.abilities.orbital_ring;
-    const s = ABILITY_BY_ID.orbital_ring.levels[lv - 1];
-    const odmg = s.damage * this.pmul('orbital_ring');
-    this.damageEnemy(enemy, odmg, 'energy');
-    if (s.pulse) {
-      const pr = s.pulseR || 42;
-      const ring = this.add
-        .circle(orb.x, orb.y, 4, COLORS.orb, 0.5)
-        .setBlendMode(ADD)
-        .setDepth(6);
+    const st = this.ws('orbital');
+    this.damageEnemy(enemy, st.damage, 'kinetic');
+    if (st.special.pulse) {
+      const pr = 80;
+      const ring = this.add.circle(orb.x, orb.y, 4, COLORS.orb, 0.5).setBlendMode(ADD).setDepth(6);
       this.tweens.add({
         targets: ring,
         radius: pr,
@@ -963,7 +1247,7 @@ export default class GameScene extends Phaser.Scene {
           other !== enemy &&
           Math.hypot(other.x - orb.x, other.y - orb.y) < pr
         )
-          this.damageEnemy(other, odmg * 0.6, 'energy');
+          this.damageEnemy(other, st.damage * 0.6, 'kinetic');
       });
     }
   }
@@ -972,7 +1256,7 @@ export default class GameScene extends Phaser.Scene {
     if (!enemy.active) return;
     this.applyStationDamage(enemy.contactDmg);
     this.spawnDeathFx(enemy.x, enemy.y, 0xff8a8a);
-    enemy.destroy();
+    this.kill(enemy);
     this.cameras.main.shake(120, 0.006);
   }
 
@@ -983,36 +1267,161 @@ export default class GameScene extends Phaser.Scene {
     if (!enemy.active || enemy._untargetable) return; // sigiloso en fase = inmune
     let dmg = amount * (enemy.dmgMul || 1); // pasiva NO global (solo arma común)
     dmg *= resistMul(enemy.enemyType, type); // resistencia/debilidad por tipo
+    if (enemy._distortUntil && this.timeSurvived < enemy._distortUntil) dmg *= 1.5; // agujero negro
     if (enemy._shieldedUntil && this.timeSurvived < enemy._shieldedUntil)
       dmg *= enemy._shieldMul || 1;
     enemy.hp -= dmg;
+    // Arcade Neon: damage numbers flotantes en cada impacto.
+    this.spawnDamageNumber(enemy.x, enemy.y, dmg, type, false);
+    // Hit-flash: enemy turns white for 60ms
+    if (enemy.active && enemy.hp > 0) {
+      enemy.setTintFill(0xffffff);
+      this.time.delayedCall(60, () => enemy.active && enemy.clearTint());
+    }
     if (enemy.hp <= 0) {
       const wasBoss = enemy.flags && enemy.flags.boss;
       this.spawnDeathFx(enemy.x, enemy.y, wasBoss ? 0xff4f86 : COLORS.xp);
       this.sfx?.play('explosion');
       this.kills++;
+      this.registerKillstreak();
       this.addXp(enemy.xpValue);
       this.gold = (this.gold || 0) + (enemy.goldValue || 0);
-      enemy.destroy();
+      // Shake graduado: kill peque\u00f1o, ning\u00fan shake; kill grande, leve.
+      if (enemy.maxHp > 80 && !wasBoss) this.cameras.main.shake(90, 0.004);
+      this.kill(enemy);
       if (wasBoss) {
-        if (this.mode === 'level' && !this._won) this.levelClear();
-        else this.cameras.main.shake(300, 0.01);
+        // Boss kill: shake fuerte + flash
+        this.cameras.main.shake(450, 0.014);
+        this.cameras.main.flash(180, 255, 43, 214);
+        // Persistir conteo de jefes -> desbloquea Drone (1) y Agujero Negro (2).
+        this.bossCount++;
+        const saved = parseInt(localStorage.getItem('os_bosses') || '0', 10) || 0;
+        localStorage.setItem('os_bosses', String(Math.max(this.bossCount, saved)));
+        if (this.mode === 'level') this.triggerWin();
       }
     }
   }
 
+  // ==========================================================================
+  //  Damage numbers (Arcade Neon)
+  //  Texto flotante que sube del enemigo al recibir da\u00f1o. Crit (> 50 dmg)
+  //  con tama\u00f1o 1.5x y color del arma.
+  // ==========================================================================
+  spawnDamageNumber(x, y, amount, type, crit) {
+    const n = Math.max(1, Math.round(amount));
+    const big = n >= 50;
+    const colorMap = {
+      kinetic: '#ffffff',
+      energy: '#00f0ff',
+      explosive: '#ff8a3d',
+      laser: '#ff2bd6'
+    };
+    const color = colorMap[type] || '#ffffff';
+    const txt = this.getText();
+    txt
+      .setText(String(n))
+      .setFontSize(big ? 28 : 20)
+      .setColor(color)
+      .setFontStyle('bold')
+      .setStroke('#10081f', 4)
+      .setOrigin(0.5, 1)
+      .setPosition(x + Phaser.Math.Between(-8, 8), y - 8)
+      .setDepth(20);
+    this.tweens.add({
+      targets: txt,
+      y: y - (big ? 56 : 38),
+      alpha: 0,
+      scale: big ? 1.0 : 0.9,
+      duration: big ? 720 : 540,
+      ease: 'Cubic.out',
+      onComplete: () => this.freeText(txt)
+    });
+  }
+
+  // ==========================================================================
+  //  Killstreak: cuenta kills en los \u00faltimos 1500ms.
+  //  Si supera 5, muestra texto chunky en pantalla.
+  // ==========================================================================
+  registerKillstreak() {
+    const now = this.timeSurvived;
+    if (!this._streakHits) this._streakHits = [];
+    this._streakHits.push(now);
+    // descarta los > 1500ms viejos
+    while (this._streakHits.length && now - this._streakHits[0] > 1500) {
+      this._streakHits.shift();
+    }
+    const streak = this._streakHits.length;
+    if (streak >= 5 && (!this._lastStreakShown || streak > this._lastStreakShown)) {
+      this._lastStreakShown = streak;
+      this.showStreak(streak);
+    }
+    if (streak < 5) this._lastStreakShown = 0;
+  }
+
+  showStreak(n) {
+    if (this._streakTxt) this._streakTxt.destroy();
+    const tier = n >= 15 ? 'INSANE!' : n >= 10 ? 'RAMPAGE!' : 'STREAK';
+    const color = n >= 15 ? '#ff2bd6' : n >= 10 ? '#ffe640' : '#00f0ff';
+    const txt = this.add
+      .text(GAME_W / 2, 120, `\u00d7${n}  ${tier}`, {
+        fontFamily: '"Pixelify Sans", monospace',
+        fontSize: '26px',
+        color,
+        fontStyle: 'bold',
+        stroke: '#10081f',
+        strokeThickness: 5
+      })
+      .setOrigin(0.5)
+      .setDepth(30)
+      .setScale(0.4)
+      .setAlpha(0);
+    this._streakTxt = txt;
+    this.tweens.add({
+      targets: txt,
+      scale: 1.1,
+      alpha: 1,
+      duration: 200,
+      ease: 'Back.out',
+      onComplete: () => {
+        this.tweens.add({
+          targets: txt,
+          scale: 1,
+          duration: 120,
+          ease: 'Sine.out'
+        });
+        this.time.delayedCall(900, () => {
+          this.tweens.add({
+            targets: txt,
+            alpha: 0,
+            y: 100,
+            duration: 320,
+            onComplete: () => txt.destroy()
+          });
+        });
+      }
+    });
+  }
+
   applyStationDamage(amount) {
+    // Nivel ya ganado (o en su "respiro" final): nada de daño/derrota.
+    if (this._won || this._winPending) return;
+    // ESPECIAL escudo "Absorción": anula el golpe letal + 1s de invulnerable
+    // (un uso por nivel).
+    if (this._absorb && !this._absorbUsed && amount >= this.hp + this.shield) {
+      this._absorbUsed = true;
+      this._invulUntil = this.timeSurvived + 1000;
+      this.shield = this.shieldMax || this.shield;
+      this.cameras.main.flash(160, 73, 242, 194);
+      return;
+    }
+    if (this._invulUntil && this.timeSurvived < this._invulUntil) return;
+    const raw = amount;
+    if (this.shieldResist) amount *= 1 - this.shieldResist; // común "+Resistencia"
     if (this.shield > 0) {
       const absorbed = Math.min(this.shield, amount);
       this.shield -= absorbed;
       amount -= absorbed;
-      this.shieldThorns(); // ESPECIAL III escudo: espinas en cada impacto
-      if (this.shield <= 0 && !this.shieldBrokenFlag) {
-        this.shieldBrokenFlag = true;
-        this.onShieldBreak();
-      }
-    } else {
-      this.shieldBrokenFlag = false;
+      if (this._thorns) this.shieldThorns(raw * 0.25); // ESPECIAL "Espinas"
     }
     if (amount <= 0) return;
     this.hp = Math.max(0, this.hp - amount);
@@ -1020,11 +1429,7 @@ export default class GameScene extends Phaser.Scene {
     if (this.hp <= 0) this.gameOver();
   }
 
-  shieldThorns() {
-    const lv = this.abilities.regen_shield;
-    if (!lv) return;
-    const s = ABILITY_BY_ID.regen_shield.levels[lv - 1];
-    if (!s.reflect) return;
+  shieldThorns(td) {
     const R = 130;
     const ring = this.add
       .circle(CX, CY, STATION.radius, COLORS.shield, 0.3)
@@ -1037,49 +1442,21 @@ export default class GameScene extends Phaser.Scene {
       duration: 220,
       onComplete: () => ring.destroy()
     });
-    const td = 24 * this.pmul('regen_shield');
     this.enemies.children.iterate((e) => {
       if (e && e.active && Math.hypot(e.x - CX, e.y - CY) < R) this.damageEnemy(e, td, 'energy');
     });
   }
 
-  onShieldBreak() {
-    const lv = this.abilities.regen_shield;
-    if (!lv) return;
-    const s = ABILITY_BY_ID.regen_shield.levels[lv - 1];
-    if (!s.burst) return;
-    this.sfx?.play('shieldbreak');
-    const ring = this.add
-      .circle(CX, CY, STATION.radius, COLORS.shield, 0.4)
-      .setBlendMode(ADD)
-      .setDepth(6);
-    this.tweens.add({
-      targets: ring,
-      radius: 150,
-      alpha: 0,
-      duration: 380,
-      onComplete: () => ring.destroy()
-    });
-    const bd = s.burst * this.pmul('regen_shield');
-    this.enemies.children.iterate((e) => {
-      if (e && e.active && Math.hypot(e.x - CX, e.y - CY) < 150) this.damageEnemy(e, bd, 'energy');
-    });
-  }
-
   spawnDeathFx(x, y, color) {
-    const g = this.add
-      .image(x, y, 'tex_glow')
-      .setTint(color)
-      .setBlendMode(ADD)
-      .setScale(0.4)
-      .setDepth(6);
+    const g = this.getGlow();
+    g.setPosition(x, y).setTint(color).setScale(0.4).setAlpha(1).setDepth(6);
     this.tweens.add({
       targets: g,
       scale: 1.1,
       alpha: 0,
       duration: 280,
       ease: 'Quad.out',
-      onComplete: () => g.destroy()
+      onComplete: () => this.freeGlow(g)
     });
   }
 
@@ -1106,46 +1483,77 @@ export default class GameScene extends Phaser.Scene {
     this.running = false;
     this.physics.world.pause();
 
-    const owned = Object.keys(this.abilities);
-    const pool = [];
+    // Pool atómico (motor v0.7). Cada candidato = una carta apilable.
+    let pool = draftPool(this.up, { bossCount: this.bossCount });
 
-    for (const id of owned) {
-      if (this.abilities[id] < MAX_LEVEL)
-        pool.push({ id, type: 'up', nextLevel: this.abilities[id] + 1 });
+    // Cap de slots (suave): si ya hay ABILITY_SLOTS armas ocupando hueco, no
+    // ofrecer la 1ª carta de un arma que aún no ocupa slot.
+    const occupied = WEAPON_IDS.filter((w) => occupiesSlot(w, this.up)).length;
+    if (occupied >= ABILITY_SLOTS) {
+      pool = pool.filter((c) => occupiesSlot(c.wid, this.up));
     }
-    if (owned.length < ABILITY_SLOTS) {
-      for (const a of ABILITIES) {
-        if (!this.abilities[a.id]) pool.push({ id: a.id, type: 'new', nextLevel: 1 });
+
+    // Selección ponderada de hasta 3 cartas distintas.
+    const picks = [];
+    const bag = pool.slice();
+    while (picks.length < 3 && bag.length) {
+      let total = 0;
+      for (const c of bag) total += c.weight;
+      let r = Math.random() * total;
+      let idx = 0;
+      for (let i = 0; i < bag.length; i++) {
+        r -= bag[i].weight;
+        if (r <= 0) {
+          idx = i;
+          break;
+        }
       }
+      picks.push(bag.splice(idx, 1)[0]);
     }
-
-    Phaser.Utils.Array.Shuffle(pool);
-    const picks = pool.slice(0, 3);
-    while (picks.length < 3) picks.push({ id: '__repair', type: 'repair', nextLevel: 0 });
 
     const choices = picks.map((p) => {
-      if (p.type === 'repair') {
-        return {
-          id: '__repair',
-          name: t('ui.repair_name'),
-          color: 0x9affc4,
-          levelLabel: t('ui.tag_support'),
-          level: 0,
-          pips: false,
-          desc: t('ui.repair_desc', { n: Math.round(this.maxHp * 0.25) })
-        };
-      }
-      const a = ABILITY_BY_ID[p.id];
+      const m = cardMeta(p.wid, p.kind, p.id);
+      const stacks = p.kind === 'common' ? (this.up[p.wid].commons[p.id] || 0) : 0;
+      const max = p.kind === 'common' ? WEAPONS[p.wid].commons.find((c) => c.id === p.id).max : 0;
+      const badge =
+        p.kind === 'special'
+          ? t('ui.tag_special')
+          : p.kind === 'unlock'
+            ? t('ui.tag_new')
+            : null;
       return {
-        id: p.id,
-        name: a.name,
-        color: a.color,
-        levelLabel: levelLabel(p.nextLevel),
-        level: p.nextLevel,
-        pips: true,
-        desc: a.desc(p.nextLevel)
+        id: `${p.wid}:${p.kind}:${p.id}`,
+        name: m.weapon,
+        color: m.color,
+        icon: p.wid,
+        badge,
+        levelLabel:
+          p.kind === 'common'
+            ? `${m.title} ${stacks + 1}/${max}`
+            : p.kind === 'special'
+              ? m.title
+              : '', // 'unlock': el badge ya dice NUEVA; no repetir el nombre
+
+        level: p.kind === 'common' ? stacks + 1 : 0,
+        pips: false,
+        desc: m.desc
       };
     });
+
+    // Relleno con "Reparar" si no hubo 3 cartas.
+    while (choices.length < 3) {
+      choices.push({
+        id: '__repair',
+        name: t('ui.repair_name'),
+        color: 0x9affc4,
+        icon: null,
+        badge: null,
+        levelLabel: t('ui.tag_support'),
+        level: 0,
+        pips: false,
+        desc: t('ui.repair_desc', { n: Math.round(this.maxHp * 0.25) })
+      });
+    }
 
     this.events.emit('levelup', { choices, level: this.level });
   }
@@ -1154,10 +1562,12 @@ export default class GameScene extends Phaser.Scene {
     if (id === '__repair') {
       this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.25);
     } else {
-      this.abilities[id] = (this.abilities[id] || 0) + 1;
-      if (id === 'orbital_ring') this.rebuildOrbs();
+      // id = "wid:kind:cardId"
+      const [wid, kind, cid] = id.split(':');
+      applyUpg(this.up, { wid, kind, id: cid });
+      if (wid === 'orbital') this.rebuildOrbs();
       // El nuevo alcance "aparece": resalte del rango del arma conseguida.
-      const w = this.weaponRanges().find((x) => x.id === id);
+      const w = this.weaponRanges().find((x) => x.id === wid);
       if (w) this.pingRange(w.range, w.color);
     }
 
@@ -1177,11 +1587,17 @@ export default class GameScene extends Phaser.Scene {
   //  UTILIDADES / FIN
   // ===========================================================================
   nearestEnemy(maxRange = Infinity) {
+    return this.nearestEnemyToPoint(CX, CY, maxRange);
+  }
+
+  // Enemigo más cercano a un punto (lo usan los misiles: cada uno persigue
+  // al que tiene MÁS cerca, no al más cercano a la estación).
+  nearestEnemyToPoint(px, py, maxRange = Infinity) {
     let best = null;
     let bd = maxRange * maxRange;
     this.enemies.children.iterate((e) => {
       if (!e || !e.active || e._untargetable) return;
-      const d = (e.x - CX) ** 2 + (e.y - CY) ** 2;
+      const d = (e.x - px) ** 2 + (e.y - py) ** 2;
       if (d < bd) {
         bd = d;
         best = e;
@@ -1209,6 +1625,17 @@ export default class GameScene extends Phaser.Scene {
       kills: this.kills,
       level: this.level,
       gold: this.gold
+    });
+  }
+
+  // "Un poco de aire": al caer el último enemigo el juego sigue ~1s (se ven
+  // las explosiones, la cámara respira) y RECIÉN ahí aparece la victoria.
+  triggerWin() {
+    if (this._won || this._winPending) return;
+    this._winPending = true;
+    this.sfx?.play('explosion'); // último estallido, sin jingle todavía
+    this.time.delayedCall(1100, () => {
+      if (!this._won && this.scene.isActive()) this.levelClear();
     });
   }
 
@@ -1271,7 +1698,13 @@ export default class GameScene extends Phaser.Scene {
       kills: this.kills,
       gold: this.gold,
       slots: ABILITY_SLOTS,
-      abilities: { ...this.abilities },
+      weapons: WEAPON_IDS.filter((w) => occupiesSlot(w, this.up)).map((w) => ({
+        id: w,
+        name: wname(w),
+        color: WEAPONS[w].color,
+        commons: this.up[w].totalCommons,
+        specials: this.up[w].specials.length
+      })),
       mode: this.mode,
       levelNum: this.levelNum,
       targetKills: this.targetKills,

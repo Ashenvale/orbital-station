@@ -1,45 +1,73 @@
 // ---------------------------------------------------------------------------
-// Resistencias por enemigo (numérico aquí; textos/idiomas en i18n).
-//   resist[type] < 1  -> RESISTE (recibe menos) ; > 1 -> DÉBIL (recibe más)
-// Tipos: kinetic, explosive, laser, energy.  Comportamiento => en.<id>.info
+// Sistema de tipos v0.7: cada enemigo tiene un ARQUETIPO con tipos a los que es
+// DÉBIL (recibe ×1.5) y a los que RESISTE (recibe ×0.5). Rompe el combo único.
+// Tipos de daño: kinetic, explosive, energy, elemental, gravity.
+// (compat: 'laser' del código viejo se trata como 'energy').
 // ---------------------------------------------------------------------------
 import { t } from '../i18n.js';
 
-export const DMG_KEYS = ['kinetic', 'explosive', 'laser', 'energy'];
+const TYPE_NORM = { laser: 'energy' };
+const norm = (ty) => TYPE_NORM[ty] || ty;
 
-export const RESIST = {
-  debris: { kinetic: 0.7 },
-  asteroid: { kinetic: 0.55, explosive: 1.4 },
-  missile: { laser: 1.3 },
-  ship: { laser: 1.25 },
-  probe: { kinetic: 1.2 },
-  drone: {},
-  armored: { kinetic: 0.45, explosive: 0.7, laser: 1.4 },
-  interceptor: { explosive: 0.7, laser: 1.3 },
-  bomb: { kinetic: 1.3 },
-  healer: { laser: 1.4 },
-  shielder: { energy: 0.5, laser: 0.7, kinetic: 1.3 },
-  stealth: { laser: 0.6, explosive: 1.3 },
-  berserker: { explosive: 0.6, laser: 1.3 },
-  carrier: { explosive: 0.7, laser: 1.2 },
-  boss_core: { kinetic: 0.7, explosive: 0.7, laser: 1.2 }
+export const TYPE_COLOR = {
+  kinetic: 0xfff07a,
+  explosive: 0xff7a59,
+  energy: 0xff4f86,
+  elemental: 0x6fe3ff,
+  gravity: 0xb36bff
 };
 
-// Multiplicador de daño de `type` sobre el enemigo `id`.
-export const resistMul = (id, type) => {
-  const r = RESIST[id];
-  return r && r[type] != null ? r[type] : 1;
+// Arquetipo: weak[] recibe ×1.5 ; resist[] recibe ×0.5.
+const ARCH = {
+  caza: { weak: ['kinetic', 'explosive'], resist: ['elemental'] },
+  blindado: { weak: ['energy', 'gravity'], resist: ['kinetic'] },
+  enjambre: { weak: ['explosive', 'elemental'], resist: ['energy'] },
+  volador: { weak: ['kinetic', 'energy'], resist: ['explosive'] },
+  fase: { weak: ['elemental', 'gravity'], resist: ['kinetic', 'energy'] },
+  jefe: { weak: ['energy'], resist: ['kinetic'] }
 };
 
-// Listas legibles (i18n) para la card: { resiste:[...], debil:[...] }
+export const ENEMY_ARCH = {
+  debris: 'caza',
+  asteroid: 'blindado',
+  missile: 'volador',
+  ship: 'caza',
+  probe: 'volador',
+  drone: 'enjambre',
+  swarm: 'enjambre',
+  armored: 'blindado',
+  interceptor: 'volador',
+  bomb: 'caza',
+  healer: 'enjambre',
+  shielder: 'fase',
+  stealth: 'fase',
+  berserker: 'blindado',
+  carrier: 'blindado',
+  boss_core: 'jefe'
+};
+
+const archOf = (id) => ARCH[ENEMY_ARCH[id]] || ARCH.caza;
+
+// Multiplicador de daño de `type` sobre el enemigo `id`. ±50%.
+export function resistMul(id, type) {
+  const ty = norm(type);
+  const a = archOf(id);
+  if (a.weak.includes(ty)) return 1.5;
+  if (a.resist.includes(ty)) return 0.5;
+  return 1;
+}
+
+// Color del aura = primer tipo débil del enemigo (para leerlo sin tabla).
+export function weaknessColor(id) {
+  const a = archOf(id);
+  return TYPE_COLOR[a.weak[0]] || 0xffffff;
+}
+
+// Listas legibles (i18n) para la card de enemigo nuevo.
 export function resistSummary(id) {
-  const r = RESIST[id] || {};
-  const resiste = [];
-  const debil = [];
-  for (const k of DMG_KEYS) {
-    if (r[k] == null) continue;
-    if (r[k] < 1) resiste.push(t(`dmg.${k}`));
-    else if (r[k] > 1) debil.push(t(`dmg.${k}`));
-  }
-  return { resiste, debil };
+  const a = archOf(id);
+  return {
+    resiste: a.resist.map((k) => t(`dmg.${k}`)),
+    debil: a.weak.map((k) => t(`dmg.${k}`))
+  };
 }

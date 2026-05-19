@@ -66,14 +66,14 @@ export function ensureTextures(scene) {
       x.closePath();
       x.fillStyle = css(color, fillA);
       x.fill();
-      x.shadowColor = css(color, 0.9);
-      x.shadowBlur = 10;
-      x.lineWidth = 2;
-      x.strokeStyle = css(0xffffff, 0.9);
+      x.shadowColor = css(color, 1);
+      x.shadowBlur = 14;
+      x.lineWidth = 3;
+      x.strokeStyle = css(0xffffff, 1);
       x.stroke();
       x.shadowBlur = 0;
-      x.lineWidth = 1;
-      x.strokeStyle = css(color, 0.9);
+      x.lineWidth = 1.5;
+      x.strokeStyle = css(color, 1);
       x.stroke();
       x.restore();
     });
@@ -109,24 +109,24 @@ export function ensureTextures(scene) {
       i ? x.lineTo(px, py) : x.moveTo(px, py);
     }
     x.closePath();
-    x.fillStyle = css(COLORS.station, 0.16);
+    x.fillStyle = css(COLORS.station, 0.28);
     x.fill();
-    x.shadowColor = css(COLORS.station, 0.9);
-    x.shadowBlur = 14;
-    x.lineWidth = 2.5;
-    x.strokeStyle = css(COLORS.stationCore, 0.95);
+    x.shadowColor = css(COLORS.station, 0.95);
+    x.shadowBlur = 22;
+    x.lineWidth = 3.5;
+    x.strokeStyle = css(COLORS.stationCore, 1);
     x.stroke();
     x.shadowBlur = 0;
     x.beginPath();
-    x.arc(0, 0, 6, 0, Math.PI * 2);
+    x.arc(0, 0, 7, 0, Math.PI * 2);
     x.fillStyle = css(COLORS.stationCore, 1);
     x.fill();
     x.restore();
   });
 
-  // Línea de escaneo (patrón TileSprite).
+  // Línea de escaneo (patrón TileSprite) — magenta arcade.
   make('tex_scan', 4, 4, (x) => {
-    x.fillStyle = css(COLORS.station, 0.5);
+    x.fillStyle = css(COLORS.laser, 0.55);
     x.fillRect(0, 3, 4, 1);
   });
 
@@ -140,8 +140,8 @@ export function ensureTextures(scene) {
       GAME_H / 2,
       GAME_H * 0.72
     );
-    vg.addColorStop(0, 'rgba(2,3,10,0)');
-    vg.addColorStop(1, 'rgba(1,2,8,0.92)');
+    vg.addColorStop(0, 'rgba(16,8,31,0)');
+    vg.addColorStop(1, 'rgba(8,3,18,0.94)');
     x.fillStyle = vg;
     x.fillRect(0, 0, GAME_W, GAME_H);
   });
