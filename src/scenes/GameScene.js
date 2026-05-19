@@ -1320,8 +1320,8 @@ export default class GameScene extends Phaser.Scene {
 
       // Embestida tipo "pasada": elige un enemigo, lo ATRAVIESA rápido y
       // sale por el otro lado; luego busca otro (puede o no ser el anterior).
-      const DASH_SP = st.speed * 2.6;
-      const OVERSHOOT = 110;
+      const DASH_SP = st.speed * 1.7;
+      const OVERSHOOT = 55;
       if (!d._dash) {
         const tg = this.nearestEnemyToPoint(d.x, d.y);
         if (tg) {
@@ -1862,6 +1862,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   addXp(amount) {
+    // Modo DEV: sin XP automática; se sube de nivel con el botón ⬆ NIVEL.
+    if (this.dev) return;
     // Partida terminada o en su "respiro" final: no más XP ni subir de nivel
     // (no tiene sentido draftear con el nivel ya ganado/perdido).
     if (this._won || this._winPending) return;
@@ -1996,8 +1998,12 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // Botón DEV: abrir el selector completo CUANDO QUIERA (sin gastar nivel).
-  openDevPicker() {
+  openDevPicker(levelUp) {
     if (!this.dev || !this.running || this.drafting || this._won || this._winPending) return;
+    if (levelUp) {
+      this.level++;
+      this.sfx?.play('levelup');
+    }
     this._devPicker = true;
     this.drafting = true;
     this.running = false;

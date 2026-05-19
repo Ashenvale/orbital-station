@@ -207,30 +207,35 @@ export default class UIScene extends Phaser.Scene {
       this.showPause();
     });
 
-    // Botón DEV (solo ?dev=1): abre el selector completo cuando quieras.
+    // Botones DEV (solo modo dev): elegir arma a demanda + subir de nivel.
     if (this.gs.dev) {
-      this.devBtn = this.add
-        .text(14, GAME_H - 86, '✚ ARMA', {
-          fontFamily: FONT,
-          fontSize: '15px',
-          color: '#ffe640',
-          fontStyle: 'bold'
-        })
-        .setOrigin(0, 0.5)
-        .setInteractive({ useHandCursor: true });
-      this.devBtn.on('pointerover', () => Sfx.play('hover'));
-      this.devBtn.on('pointerdown', () => {
-        if (!this.gs.running || this.gs.drafting) return;
-        Sfx.play('open');
-        this.tweens.add({
-          targets: this.devBtn,
-          scale: 0.9,
-          duration: 70,
-          yoyo: true,
-          ease: 'Quad.out'
+      const mkDev = (y, label, levelUp) => {
+        const b = this.add
+          .text(14, y, label, {
+            fontFamily: FONT,
+            fontSize: '15px',
+            color: '#ffe640',
+            fontStyle: 'bold'
+          })
+          .setOrigin(0, 0.5)
+          .setInteractive({ useHandCursor: true });
+        b.on('pointerover', () => Sfx.play('hover'));
+        b.on('pointerdown', () => {
+          if (!this.gs.running || this.gs.drafting) return;
+          Sfx.play('open');
+          this.tweens.add({
+            targets: b,
+            scale: 0.9,
+            duration: 70,
+            yoyo: true,
+            ease: 'Quad.out'
+          });
+          this.gs.openDevPicker(levelUp);
         });
-        this.gs.openDevPicker();
-      });
+        return b;
+      };
+      this.devLvlBtn = mkDev(GAME_H - 112, '⬆ NIVEL', true);
+      this.devBtn = mkDev(GAME_H - 86, '✚ ARMA', false);
     }
 
     // -- Overlays -----------------------------------------------------------
@@ -504,12 +509,33 @@ export default class UIScene extends Phaser.Scene {
       this.add
         .text(GAME_W / 2, 34, `DEV · LEVEL ${level} — elegí cualquiera`, {
           fontFamily: FONT,
-          fontSize: '20px',
+          fontSize: '18px',
           color: '#ffe640',
           fontStyle: 'bold'
         })
         .setOrigin(0.5)
     );
+    // Salir al menú desde el selector (sin tener que elegir algo).
+    const menuBtn = this.add
+      .text(GAME_W - 14, 34, '⟵ MENÚ', {
+        fontFamily: FONT,
+        fontSize: '15px',
+        color: '#00f0ff',
+        fontStyle: 'bold'
+      })
+      .setOrigin(1, 0.5)
+      .setInteractive({ useHandCursor: true });
+    menuBtn.on('pointerover', () => Sfx.play('hover'));
+    menuBtn.on('pointerdown', () => {
+      Sfx.play('back');
+      if (this._devScrollOff) this._devScrollOff();
+      this.tweens.killAll();
+      this.draftLayer.setVisible(false);
+      this.draftLayer.removeAll(true);
+      this.scene.stop('GameScene');
+      this.scene.start('MenuScene');
+    });
+    this.draftLayer.add(menuBtn);
 
     const margin = 14;
     const gap = 10;
