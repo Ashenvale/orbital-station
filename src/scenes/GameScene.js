@@ -129,6 +129,9 @@ export default class GameScene extends Phaser.Scene {
     this.rangeMul = shipRangeMul(Economy.powerLevel('sh_range'));
     this.shipDmgMul = shipDamageMul(Economy.powerLevel('sh_damage'));
     this.shipRateMul = shipRateMul(Economy.powerLevel('sh_rate'));
+    // Potencia permanente POR ARMA (comprada con oro en Módulos).
+    this.wpnPow = {};
+    for (const wid of WEAPON_IDS) this.wpnPow[wid] = Economy.powerMul(wid);
 
     // -- Estado de la partida -------------------------------------------------
     this.running = true;
@@ -430,9 +433,15 @@ export default class GameScene extends Phaser.Scene {
     return 1;
   }
 
-  // Stats efectivos de un arma (motor v0.7).
+  // Stats efectivos de un arma (motor v0.7) + potencia permanente por arma.
   ws(id) {
-    return weaponStats(id, this.up);
+    const s = weaponStats(id, this.up);
+    const pm = (this.wpnPow && this.wpnPow[id]) || 1;
+    if (pm !== 1) {
+      if (s.damage != null) s.damage *= pm;
+      if (s.dps != null) s.dps *= pm;
+    }
+    return s;
   }
 
   // Los proyectiles no "vuelan al infinito": se eliminan al salir de pantalla.

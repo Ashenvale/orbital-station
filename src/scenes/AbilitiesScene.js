@@ -137,6 +137,7 @@ export default class AbilitiesScene extends Phaser.Scene {
     WEAPON_IDS.forEach((wid, i) => {
       const W = WEAPONS[wid];
       const locked = !isUnlocked(wid, bosses);
+      const plv = Economy.powerLevel(wid);
       grid.add(
         buildTile(this, {
           cx: colX(i % cols),
@@ -147,8 +148,12 @@ export default class AbilitiesScene extends Phaser.Scene {
           name: wname(wid),
           icon: wid,
           compact: true,
-          footer: locked ? t('ui.wpn_lock', { n: unlockN(W.unlock) }) : t('ui.wpn_run'),
-          footerColor: locked ? '#6f7d8c' : '#7fb8cf',
+          footer: locked
+            ? t('ui.wpn_lock', { n: unlockN(W.unlock) })
+            : plv > 0
+              ? t('ui.f_power', { n: plv })
+              : t('ui.wpn_run'),
+          footerColor: locked ? '#6f7d8c' : plv > 0 ? GOLD : '#7fb8cf',
           onClick: () => this.openWeaponDetail(wid, locked)
         })
       );
@@ -329,15 +334,45 @@ export default class AbilitiesScene extends Phaser.Scene {
       );
       yy += 30;
     });
+    // Potencia permanente (oro): +12% daño por nivel para ESTA arma.
+    const plv = Economy.powerLevel(wid);
+    const pmax = Economy.isMax(wid);
+    const pcost = Economy.cost(wid);
+    const pafford = !pmax && Economy.gold() >= pcost;
     kids.push(
       this.add
-        .text(0, hh - 28, t('ui.wpn_run'), {
+        .text(0, hh - 74, `Potencia  Nv ${plv}/${MAX_POWER}  ·  +${plv * 12}% daño`, {
           fontFamily: FONT,
-          fontSize: '12px',
-          color: '#7fb8cf'
+          fontSize: '13px',
+          color: plv > 0 ? GOLD : '#aecbe0'
         })
         .setOrigin(0.5)
     );
+    const upBtn = this.add
+      .rectangle(0, hh - 42, w - 56, 34, 0x0c1f2b, 0.95)
+      .setStrokeStyle(2, pmax ? 0x44546a : pafford ? 0xffd76a : 0x7a6a3a, 0.9);
+    const upTx = this.add
+      .text(0, hh - 42, pmax ? t('ui.lvl_max') : t('ui.upgrade', { c: pcost }), {
+        fontFamily: FONT,
+        fontSize: '14px',
+        color: pmax ? '#7f8fa0' : pafford ? '#ffe9a8' : '#9a8b5a',
+        fontStyle: 'bold'
+      })
+      .setOrigin(0.5);
+    kids.push(upBtn, upTx);
+    if (!pmax) {
+      upBtn.setInteractive({ useHandCursor: true });
+      upBtn.on('pointerdown', () => {
+        if (Economy.buyPower(wid)) {
+          Sfx.play('levelup');
+          this.afterBuy();
+          this.openWeaponDetail(wid, locked); // se refresca sin cerrar
+        } else {
+          Sfx.play('hit');
+          upBtn.setStrokeStyle(2, 0xff6b7d, 0.9);
+        }
+      });
+    }
 
     const close = this.add
       .text(hw - 20, -hh + 16, '✕', {
