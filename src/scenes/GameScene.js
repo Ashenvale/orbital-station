@@ -1429,7 +1429,37 @@ export default class GameScene extends Phaser.Scene {
       // mejora especial "Kamikaze"; sin ella, muere sin estallar.
       if (d.hp <= 0) {
         if (st.special.kamikaze) {
-          this.plasmaField(d.x, d.y, st.damage * 4, 'kinetic', 70);
+          const R = 84;
+          // Daño AOE.
+          this.enemies.children.iterate((e) => {
+            if (e && e.active && Math.hypot(e.x - d.x, e.y - d.y) < R)
+              this.damageEnemy(e, st.damage * 4, 'kinetic');
+          });
+          // Destello brillante grande.
+          const g = this.getGlow();
+          g.setPosition(d.x, d.y).setTint(0xffe6a0).setScale(0.45).setAlpha(0.95).setDepth(7);
+          this.tweens.add({
+            targets: g,
+            scale: (R * 2.4) / 64,
+            alpha: 0,
+            duration: 340,
+            ease: 'Quad.out',
+            onComplete: () => this.freeGlow(g)
+          });
+          // Anillo expansivo + sacudida.
+          const ring = this.add
+            .circle(d.x, d.y, 8, 0xff8a3d, 0)
+            .setStrokeStyle(3, 0xffd76a, 0.95)
+            .setBlendMode(ADD)
+            .setDepth(7);
+          this.tweens.add({
+            targets: ring,
+            radius: R,
+            alpha: 0,
+            duration: 360,
+            onComplete: () => ring.destroy()
+          });
+          this.cameras.main.shake(120, 0.006);
           this.sfx?.play('explosion');
         } else {
           this.spawnDeathFx(d.x, d.y, 0x9ad0ff);
