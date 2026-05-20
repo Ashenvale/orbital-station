@@ -701,6 +701,7 @@ export default class GameScene extends Phaser.Scene {
     e._poisonDps = 0;
     e._untargetable = false;
     e._heldUntil = 0;
+    e._kbRemain = 0; // px de empuje (escopeta) pendientes de deslizar
     e._noQuota = false; // los invocados por jefe/portanaves se marcan true
     e._atkT = 0;
     e._blinkT = 0;
@@ -910,6 +911,14 @@ export default class GameScene extends Phaser.Scene {
         e.body.setVelocity(nx * sp - ny * lat, ny * sp + nx * lat);
       } else {
         e.body.setVelocity(nx * sp, ny * sp);
+      }
+
+      // Empuje de escopeta: desliza hacia afuera lo pendiente (no teletransporta).
+      if (e._kbRemain > 0) {
+        const step = Math.min(e._kbRemain, 360 * (dt / 1000));
+        e.x -= nx * step; // nx,ny apuntan al centro -> restar = alejar
+        e.y -= ny * step;
+        e._kbRemain -= step;
       }
 
       if (!fl.stealth) e.setTint(slowed ? 0x6fa8ff : 0xffffff);
@@ -1649,14 +1658,9 @@ export default class GameScene extends Phaser.Scene {
     bullet._hit.add(enemy);
     this.damageEnemy(enemy, bullet.damage, bullet.dmgType);
     if (bullet.slowMs) enemy.slowUntil = this.timeSurvived + bullet.slowMs; // sobrecarga
-    if (bullet.knockback) {
-      // Empuje hacia AFUERA (lejos de la estación).
-      const kx = enemy.x - CX;
-      const ky = enemy.y - CY;
-      const kd = Math.hypot(kx, ky) || 1;
-      enemy.x += (kx / kd) * bullet.knockback;
-      enemy.y += (ky / kd) * bullet.knockback;
-    }
+    // Empuje: acumula distancia a deslizar (no teletransporta). Se aplica
+    // suave en updateEnemies a ~320 px/s.
+    if (bullet.knockback) enemy._kbRemain = (enemy._kbRemain || 0) + bullet.knockback;
     if (bullet.explode) this.plasmaField(bullet.x, bullet.y, bullet.damage, 'kinetic', 40);
     if (bullet.pierce > 0) {
       bullet.pierce--;
@@ -1969,7 +1973,6 @@ export default class GameScene extends Phaser.Scene {
   }
 
   applyStationDamage(amount) {
-    if (this.dev) return; // modo DEV: estación invulnerable
     // Nivel ya ganado (o en su "respiro" final): nada de daño/derrota.
     if (this._won || this._winPending) return;
     // ESPECIAL escudo "Absorción": anula el golpe letal + 1s de invulnerable
@@ -2014,7 +2017,11 @@ export default class GameScene extends Phaser.Scene {
     if (amount <= 0) return;
     this.hp = Math.max(0, this.hp - amount);
     this.sfx?.play('damage');
-    if (this.hp <= 0) this.gameOver();
+    if (this.hp <= 0) {
+      // Modo DEV: recibe daño (para probar escudo/regen) pero NO muere.
+      if (this.dev) this.hp = 1;
+      else this.gameOver();
+    }
   }
 
   shieldThorns(td) {
