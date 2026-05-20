@@ -149,13 +149,15 @@ export function weaponStats(wid, st) {
       out.cooldownMs = b.cooldownMs * Math.pow(0.85, S('cd'));
       out.pull = b.pull;
       break;
-    case 'railgun':
+    case 'railgun': // Escopeta de plasma: ráfaga de perdigones en abanico.
       out.damage = b.damage * (1 + 0.2 * S('dmg')) * qm;
       out.cooldownMs = b.cooldownMs * Math.pow(0.88, S('rate'));
-      out.width = b.width * (1 + 0.5 * S('width'));
+      out.pellets = b.pellets + 2 * S('pellet');
+      out.spread = b.spread;
+      out.bulletSpeed = b.bulletSpeed;
       out.range = b.range;
       out.crit = 0.08 * S('crit');
-      out.beams = sp('twin') ? 2 : 1;
+      out.volleys = sp('twin') ? 2 : 1;
       break;
   }
   return out;

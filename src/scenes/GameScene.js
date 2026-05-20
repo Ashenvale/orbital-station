@@ -991,6 +991,8 @@ export default class GameScene extends Phaser.Scene {
     b.dmgType = type;
     b.explode = false;
     b.bounce = 0;
+    b.slowMs = 0;
+    b.bossMul = 1;
     b._spd = speed;
     if (b._hit) b._hit.clear();
     else b._hit = new Set();
@@ -1016,59 +1018,51 @@ export default class GameScene extends Phaser.Scene {
     this.updateOrbs(dt);
   }
 
-  // Cañón de Riel (recompensa Jefe 2): disparo lento, line-pierce brutal.
+  // Escopeta de Plasma (recompensa Jefe 2): ráfaga de perdigones en abanico,
+  // corto alcance. Distinta del láser (continuo) — esto es burst de cerca.
   tickRailgun(dt) {
     const st = this.ws('railgun');
     this.abilityTimers.rail = (this.abilityTimers.rail || 0) + dt;
     if (this.abilityTimers.rail < st.cooldownMs / this.abilRateMul) return;
     const range = this.scaledRange(st.range);
-    const inR = [];
-    this.enemies.children.iterate((e) => {
-      if (!e || !e.active || e._untargetable) return;
-      const d = Math.hypot(e.x - CX, e.y - CY);
-      if (d <= range) inR.push({ e, d });
-    });
-    if (!inR.length) return;
+    if (!this.nearestEnemy(range)) return;
     this.abilityTimers.rail = 0;
-    this.sfx?.play('shieldbreak');
-    inR.sort((a, b) => a.d - b.d);
-    const used = new Set();
-    for (let bI = 0; bI < st.beams; bI++) {
-      const aim = inR.find((o) => !used.has(o.e));
-      if (!aim) break;
-      const ang = Math.atan2(aim.e.y - CY, aim.e.x - CX);
-      const ux = Math.cos(ang);
-      const uy = Math.sin(ang);
-      for (const { e } of inR) {
-        const tp = (e.x - CX) * ux + (e.y - CY) * uy;
-        if (tp < 0 || tp > range) continue;
-        if (Math.abs((e.x - CX) * uy - (e.y - CY) * ux) > st.width) continue;
-        used.add(e);
+
+    const blast = () => {
+      if (this._won || this._winPending) return;
+      const tg = this.nearestEnemy(range);
+      if (!tg) return;
+      this.sfx?.play('shoot');
+      const baseAng = Math.atan2(tg.y - CY, tg.x - CX);
+      const n = Math.max(1, st.pellets);
+      const life = (range / st.bulletSpeed) * 1000 + 60; // perdigones de corto alcance
+      for (let i = 0; i < n; i++) {
+        const off = n > 1 ? (i / (n - 1) - 0.5) * st.spread : 0;
         let dmg = st.damage;
         if (st.crit > 0 && Math.random() < st.crit) dmg *= 2;
-        if (st.special.antimatter && e.flags && e.flags.boss) dmg *= 3;
-        this.damageEnemy(e, dmg, 'kinetic');
-        if (st.special.shock) e.slowUntil = this.timeSurvived + 1500;
+        const b = this.fireBullet(baseAng + off, st.bulletSpeed, dmg, 0, 'kinetic');
+        b.setTint(0xa0f0ff);
+        b._dieAt = this.timeSurvived + life;
+        if (st.special.shock) b.slowMs = 1500;
+        if (st.special.antimatter) b.bossMul = 3;
       }
-      // Haz grueso que se desvanece (~260ms; no en laserGfx que se limpia).
-      const g = this.add.graphics().setDepth(6).setBlendMode(ADD);
-      g.lineStyle(Math.max(5, st.width / 2), 0xa0f0ff, 0.9);
-      g.lineBetween(CX, CY, CX + ux * range, CY + uy * range);
-      this.tweens.add({ targets: g, alpha: 0, duration: 260, onComplete: () => g.destroy() });
+      // Fogonazo del cañón.
       const fx = this.getGlow();
-      fx.setPosition(CX + ux * range, CY + uy * range)
+      fx.setPosition(CX + Math.cos(baseAng) * 24, CY + Math.sin(baseAng) * 24)
         .setTint(0xa0f0ff)
-        .setScale(0.5)
-        .setAlpha(0.7)
+        .setScale(0.55)
+        .setAlpha(0.85)
         .setDepth(6);
       this.tweens.add({
         targets: fx,
-        scale: 1.4,
+        scale: 1.1,
         alpha: 0,
-        duration: 260,
+        duration: 200,
         onComplete: () => this.freeGlow(fx)
       });
-    }
+    };
+    blast();
+    if (st.volleys > 1) this.time.delayedCall(140, () => this.running && blast());
   }
 
   tickMissiles(dt) {
@@ -1559,7 +1553,10 @@ export default class GameScene extends Phaser.Scene {
   onBulletHit(bullet, enemy) {
     if (!bullet.active || !enemy.active || bullet._hit.has(enemy)) return;
     bullet._hit.add(enemy);
-    this.damageEnemy(enemy, bullet.damage, bullet.dmgType);
+    let dmg = bullet.damage;
+    if (bullet.bossMul && enemy.flags && enemy.flags.boss) dmg *= bullet.bossMul; // antimateria
+    this.damageEnemy(enemy, dmg, bullet.dmgType);
+    if (bullet.slowMs) enemy.slowUntil = this.timeSurvived + bullet.slowMs; // sobrecarga
     if (bullet.explode) this.plasmaField(bullet.x, bullet.y, bullet.damage, 'kinetic', 40);
     if (bullet.pierce > 0) {
       bullet.pierce--;

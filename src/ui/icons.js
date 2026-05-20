@@ -44,12 +44,14 @@ export function drawModuleIcon(g, id, cx, cy, r, color) {
       }
       dot(0, 0, r * 0.28);
       break;
-    case 'railgun': // riel: doble carril + punta de proyectil
-      line(-r * 0.6, -r * 0.5, r * 0.7, -r * 0.5);
-      line(-r * 0.6, r * 0.5, r * 0.7, r * 0.5);
-      g.fillTriangle(
-        cx + r * 0.55, cy - r * 0.5, cx + r * 0.55, cy + r * 0.5, cx + r, cy
-      );
+    case 'railgun': // escopeta de plasma: abanico de perdigones
+      line(-r * 0.7, 0, r * 0.1, 0);
+      line(-r * 0.2, 0, r, -r * 0.55);
+      line(-r * 0.2, 0, r, 0);
+      line(-r * 0.2, 0, r, r * 0.55);
+      dot(r, -r * 0.55, r * 0.13);
+      dot(r, 0, r * 0.13);
+      dot(r, r * 0.55, r * 0.13);
       break;
     case 'blackhole': // agujero negro (anillo + núcleo oscuro)
       g.strokeCircle(cx, cy, r * 0.9);

@@ -189,24 +189,24 @@ export const WEAPONS = {
   // Recompensa del Jefe 2 (Nv10): cañón de riel — disparo lento y brutal
   // que atraviesa TODA la línea. Distinto del láser (continuo).
   railgun: {
-    name: { es: 'Cañón de Riel', en: 'Railgun' },
+    name: { es: 'Escopeta de Plasma', en: 'Plasma Shotgun' },
     blurb: {
-      es: 'Disparo lento y brutal que atraviesa toda una línea de enemigos.',
-      en: 'Slow, brutal shot that pierces a whole line of enemies.'
+      es: 'Ráfaga de perdigones de plasma en abanico, corto alcance y mucho daño de cerca.',
+      en: 'Fan blast of plasma pellets, short range and big close-up damage.'
     },
     type: 'kinetic',
     color: 0xa0f0ff,
     unlock: 'boss2',
-    base: { damage: 70, cooldownMs: 2200, range: 215, width: 22, crit: 0 },
+    base: { damage: 14, cooldownMs: 1300, range: 165, pellets: 6, spread: 0.55, bulletSpeed: 540, crit: 0 },
     commons: [
-      C('dmg', 3, '+Daño', '+Damage', '+20% daño del riel.', '+20% railgun damage.'),
+      C('dmg', 3, '+Daño', '+Damage', '+20% daño por perdigón.', '+20% damage per pellet.'),
       C('rate', 3, '+Cadencia', '+Fire rate', '−12% enfriamiento.', '−12% cooldown.'),
-      C('width', 2, '+Calibre', '+Caliber', '+50% ancho del haz.', '+50% beam width.'),
+      C('pellet', 2, '+Perdigones', '+Pellets', '+2 perdigones. Daño −20%/stack.', '+2 pellets. Damage −20%/stack.', true),
       C('crit', 3, '+Crítico', '+Crit', '+8% prob. de crítico (×2).', '+8% crit chance (×2).')
     ],
     specials: [
-      S('twin', 'Doble riel', 'Twin rail', 'Dispara a 2 objetivos a la vez.', 'Fires at 2 targets at once.'),
-      S('shock', 'Sobrecarga', 'Shock', 'Ralentiza 1.5s a los atravesados.', 'Slows pierced enemies 1.5s.'),
+      S('twin', 'Doble cargador', 'Double tap', 'Dispara 2 ráfagas seguidas.', 'Fires two blasts in a row.'),
+      S('shock', 'Sobrecarga', 'Shock', 'Ralentiza 1.5s a los impactados.', 'Slows hit enemies 1.5s.'),
       S('antimatter', 'Antimateria', 'Antimatter', '×3 daño contra jefes.', '×3 damage vs bosses.')
     ]
   },
