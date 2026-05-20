@@ -351,6 +351,15 @@ export default class GameScene extends Phaser.Scene {
       this.sfx?.play('shieldbreak');
       this.spawnBoss(step);
     }
+
+    // Arcade (infinito): un jefe cada cierto tiempo, ciclando los 3.
+    if (this.mode === 'endless' && !this.dev) {
+      this._endlessBossT = (this._endlessBossT || 0) + dt;
+      if (this._endlessBossT >= 70000) {
+        this._endlessBossT = 0;
+        this.spawnEndlessBoss(step);
+      }
+    }
     this.station.rotation += 0.35 * (dt / 1000);
     this.moduleRing.rotation -= 0.5 * (dt / 1000);
 
@@ -1495,7 +1504,20 @@ export default class GameScene extends Phaser.Scene {
         best = e;
       }
     });
-    if (best) this._bhs.push({ x: best.x, y: best.y, end: this.timeSurvived + st.durationMs });
+    if (best) {
+      // Nunca dentro de un radio interno: si el objetivo está muy cerca de la
+      // estación, el agujero se ancla en el borde de ese radio (no encima).
+      const MIN_INNER = 120;
+      let bx = best.x;
+      let by = best.y;
+      const d = Math.hypot(bx - CX, by - CY);
+      if (d < MIN_INNER) {
+        const a = Math.atan2(by - CY, bx - CX) || 0;
+        bx = CX + Math.cos(a) * MIN_INNER;
+        by = CY + Math.sin(a) * MIN_INNER;
+      }
+      this._bhs.push({ x: bx, y: by, end: this.timeSurvived + st.durationMs });
+    }
   }
 
   // -- Agujero Negro (v0.7): atrae y daña en zona. La común +Agujero permite
@@ -1542,7 +1564,9 @@ export default class GameScene extends Phaser.Scene {
         const dy = bh.y - e.y;
         const d = Math.hypot(dx, dy) || 1;
         if (d < st.radius) {
-          e.body.setVelocity((dx / d) * st.pull, (dy / d) * st.pull); // atracción
+          // Los jefes apenas se dejan absorber (no quedan pegados al centro).
+          const pm = e.flags && e.flags.boss ? 0.12 : 1;
+          e.body.setVelocity((dx / d) * st.pull * pm, (dy / d) * st.pull * pm);
           if (st.special.distort) e._distortUntil = this.timeSurvived + 200;
           this.damageEnemy(e, st.dps * (dt / 1000), 'gravity');
         }
@@ -2129,22 +2153,29 @@ export default class GameScene extends Phaser.Scene {
     this.events.emit('levelup', { choices: this._devChoices(), level: this.level, dev: true });
   }
 
+  _spawnBossId(id, step) {
+    const ang = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    const e = this.makeEnemy(id, CX + Math.cos(ang) * SPAWN_RING, CY + Math.sin(ang) * SPAWN_RING, step);
+    e.setScale(1.15);
+    this.sfx?.play('shieldbreak');
+    this.cameras.main.shake(300, 0.008);
+  }
+
   // Botón DEV: invoca un jefe (cicla los 3 para probarlos).
   devSpawnBoss() {
     if (!this.dev || !this.running) return;
     const ids = ['boss_orbital', 'boss_siege', 'boss_warp'];
     const i = (this._devBossI || 0) % ids.length;
     this._devBossI = i + 1;
-    const ang = Phaser.Math.FloatBetween(0, Math.PI * 2);
-    const e = this.makeEnemy(
-      ids[i],
-      CX + Math.cos(ang) * SPAWN_RING,
-      CY + Math.sin(ang) * SPAWN_RING,
-      this.difficultyStep()
-    );
-    e.setScale(1.15);
-    this.sfx?.play('shieldbreak');
-    this.cameras.main.shake(300, 0.008);
+    this._spawnBossId(ids[i], this.difficultyStep());
+  }
+
+  // Arcade infinito: jefe periódico (cicla los 3).
+  spawnEndlessBoss(step) {
+    const ids = ['boss_orbital', 'boss_siege', 'boss_warp'];
+    const i = (this._endlessBossI || 0) % ids.length;
+    this._endlessBossI = i + 1;
+    this._spawnBossId(ids[i], step);
   }
 
   _applyCard(id) {
