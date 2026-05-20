@@ -978,7 +978,7 @@ export default class GameScene extends Phaser.Scene {
     if (!target) return;
     this.baseWeaponT = 0;
 
-    let damage = st.damage * this.shipDmgMul;
+    let damage = st.damage; // la pasiva +Daño se aplica en damageEnemy (global)
     if (st.crit > 0 && Math.random() < st.crit) damage *= 2;
     const n = st.projectiles;
     const baseAng = Math.atan2(target.y - CY, target.x - CX);
@@ -1776,7 +1776,8 @@ export default class GameScene extends Phaser.Scene {
   // ===========================================================================
   damageEnemy(enemy, amount, type = 'kinetic') {
     if (!enemy.active || enemy._untargetable) return; // sigiloso en fase = inmune
-    let dmg = amount * (enemy.dmgMul || 1); // pasiva NO global (solo arma común)
+    // Pasiva de nave "+Daño": GLOBAL (todas las armas), aplicada aquí.
+    let dmg = amount * (this.shipDmgMul || 1) * (enemy.dmgMul || 1);
     dmg *= resistMul(enemy.enemyType, type); // resistencia/debilidad por tipo
     if (enemy._distortUntil && this.timeSurvived < enemy._distortUntil) dmg *= 1.5; // agujero negro
     if (enemy._shieldedUntil && this.timeSurvived < enemy._shieldedUntil)
