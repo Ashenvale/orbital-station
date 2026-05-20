@@ -769,7 +769,7 @@ export default class GameScene extends Phaser.Scene {
         e._blinkT = 0;
         e._warpUntil = now + 260; // breve fase de salto (intargeteable)
         const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
-        const rr = MAX_RANGE * 0.85;
+        const rr = 138; // dentro del alcance de las armas (no se va lejos)
         e.x = CX + Math.cos(a) * rr;
         e.y = CY + Math.sin(a) * rr;
         this.cameras.main.flash(120, 150, 80, 255);
