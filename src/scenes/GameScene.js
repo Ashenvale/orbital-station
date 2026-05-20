@@ -1751,18 +1751,19 @@ export default class GameScene extends Phaser.Scene {
         // Boss kill: shake fuerte + flash
         this.cameras.main.shake(450, 0.014);
         this.cameras.main.flash(180, 255, 43, 214);
-        // Persistir conteo de jefes -> desbloquea Drone (1) y Agujero Negro (2).
-        this.bossCount++;
-        const before = parseInt(localStorage.getItem('os_bosses') || '0', 10) || 0;
-        const after = Math.max(this.bossCount, before);
-        localStorage.setItem('os_bosses', String(after));
-        // Mensaje "arma desbloqueada" (una sola vez por arma, persistido).
-        if (before < 1 && after >= 1) this.announceUnlock('drone');
-        if (before < 2 && after >= 2) this.announceUnlock('railgun');
-        if (before < 3 && after >= 3) this.announceUnlock('blackhole');
-        // NO termina el nivel por sí solo: también hay que cumplir la cuota.
-        // El chequeo combinado vive en update() (quotaDone && bossDone).
-        this._bossKilled = true;
+        // Modo dev: NO persiste progreso ni dispara win (es solo prueba).
+        if (!this.dev) {
+          // Persistir conteo de jefes -> desbloquea Drone(1)/Riel(2)/Agujero(3).
+          this.bossCount++;
+          const before = parseInt(localStorage.getItem('os_bosses') || '0', 10) || 0;
+          const after = Math.max(this.bossCount, before);
+          localStorage.setItem('os_bosses', String(after));
+          if (before < 1 && after >= 1) this.announceUnlock('drone');
+          if (before < 2 && after >= 2) this.announceUnlock('railgun');
+          if (before < 3 && after >= 3) this.announceUnlock('blackhole');
+          // NO termina el nivel solo: el chequeo combinado vive en update().
+          this._bossKilled = true;
+        }
       }
     }
   }
@@ -2095,6 +2096,24 @@ export default class GameScene extends Phaser.Scene {
     this.running = false;
     this.physics.world.pause();
     this.events.emit('levelup', { choices: this._devChoices(), level: this.level, dev: true });
+  }
+
+  // Botón DEV: invoca un jefe (cicla los 3 para probarlos).
+  devSpawnBoss() {
+    if (!this.dev || !this.running) return;
+    const ids = ['boss_orbital', 'boss_siege', 'boss_warp'];
+    const i = (this._devBossI || 0) % ids.length;
+    this._devBossI = i + 1;
+    const ang = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    const e = this.makeEnemy(
+      ids[i],
+      CX + Math.cos(ang) * SPAWN_RING,
+      CY + Math.sin(ang) * SPAWN_RING,
+      this.difficultyStep()
+    );
+    e.setScale(1.15);
+    this.sfx?.play('shieldbreak');
+    this.cameras.main.shake(300, 0.008);
   }
 
   _applyCard(id) {

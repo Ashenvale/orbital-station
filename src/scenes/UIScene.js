@@ -207,9 +207,9 @@ export default class UIScene extends Phaser.Scene {
       this.showPause();
     });
 
-    // Botones DEV (solo modo dev): elegir arma a demanda + subir de nivel.
+    // Botones DEV (solo modo dev): invocar jefe + elegir arma + subir nivel.
     if (this.gs.dev) {
-      const mkDev = (y, label, levelUp) => {
+      const mkDev = (y, label, action) => {
         const b = this.add
           .text(14, y, label, {
             fontFamily: FONT,
@@ -230,12 +230,13 @@ export default class UIScene extends Phaser.Scene {
             yoyo: true,
             ease: 'Quad.out'
           });
-          this.gs.openDevPicker(levelUp);
+          action();
         });
         return b;
       };
-      this.devLvlBtn = mkDev(GAME_H - 112, '⬆ NIVEL', true);
-      this.devBtn = mkDev(GAME_H - 86, '✚ ARMA', false);
+      this.devBossBtn = mkDev(GAME_H - 138, '👑 JEFE', () => this.gs.devSpawnBoss());
+      this.devLvlBtn = mkDev(GAME_H - 112, '⬆ NIVEL', () => this.gs.openDevPicker(true));
+      this.devBtn = mkDev(GAME_H - 86, '✚ ARMA', () => this.gs.openDevPicker(false));
     }
 
     // -- Overlays -----------------------------------------------------------
