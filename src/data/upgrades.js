@@ -197,7 +197,7 @@ export const WEAPONS = {
     type: 'kinetic',
     color: 0xa0f0ff,
     unlock: 'boss2',
-    base: { damage: 14, cooldownMs: 1300, range: 165, pellets: 6, spread: 0.55, bulletSpeed: 540, crit: 0 },
+    base: { damage: 18, cooldownMs: 1300, range: 165, pellets: 3, spread: 0.5, bulletSpeed: 540, crit: 0 },
     commons: [
       C('dmg', 3, '+Daño', '+Damage', '+20% daño por perdigón.', '+20% damage per pellet.'),
       C('rate', 3, '+Cadencia', '+Fire rate', '−12% enfriamiento.', '−12% cooldown.'),
