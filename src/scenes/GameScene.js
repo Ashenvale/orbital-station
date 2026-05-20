@@ -1210,6 +1210,9 @@ export default class GameScene extends Phaser.Scene {
       lit.add(cur);
       this.damageEnemy(cur, tick, 'energy');
       this.drawLaser(cur, 3); // estación -> objetivo (haz pleno)
+      // El haz también derriba disparos de jefe en su línea.
+      const bd = Math.hypot(cur.x - CX, cur.y - CY) || 1;
+      this._beamCutsBossShots(CX, CY, (cur.x - CX) / bd, (cur.y - CY) / bd, bd, 16);
       this.laserChain(cur.x, cur.y, tick, lit, st.refract);
     }
 
@@ -1233,8 +1236,22 @@ export default class GameScene extends Phaser.Scene {
             sLit.add(e);
           }
         });
+        this._beamCutsBossShots(CX, CY, ux, uy, range, 18); // también corta disparos
       }
     }
+  }
+
+  // Derriba los disparos de jefe que cruzan un haz (línea base->dirección).
+  _beamCutsBossShots(x1, y1, ux, uy, len, perp) {
+    this.bossShots.children.iterate((s) => {
+      if (!s || !s.active) return;
+      const t = (s.x - x1) * ux + (s.y - y1) * uy;
+      if (t < 0 || t > len) return;
+      if (Math.abs((s.x - x1) * uy - (s.y - y1) * ux) <= perp) {
+        this.spawnDeathFx(s.x, s.y, 0xfff0a0);
+        this.kill(s);
+      }
+    });
   }
 
   // Salto más cercano a (x,y) NO golpeado, dentro de JUMP_R y EN PANTALLA
