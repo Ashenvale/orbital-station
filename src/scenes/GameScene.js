@@ -1327,7 +1327,10 @@ export default class GameScene extends Phaser.Scene {
     this._thorns = !!st.special.thorns;
     this._absorb = !!st.special.absorb;
     this._shieldBurst = !!st.special.burst;
-    if (this.shield < this.shieldMax)
+    // El escudo solo regenera tras ~1.2s SIN recibir daño (si no, era
+    // imbatible: regeneraba más rápido de lo que le pegaban).
+    const canRegen = this.timeSurvived - (this._shieldHitAt || -9999) >= 1200;
+    if (canRegen && this.shield < this.shieldMax)
       this.shield = Math.min(this.shieldMax, this.shield + st.regenPerSec * (dt / 1000));
     // ESPECIAL "Reparación": cura el casco lentamente (6 HP/s).
     if (st.special.repair && this.hp < this.maxHp)
@@ -2004,6 +2007,7 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
     if (this._invulUntil && this.timeSurvived < this._invulUntil) return;
+    this._shieldHitAt = this.timeSurvived; // pausa la regen del escudo
     const raw = amount;
     if (this.shieldResist) amount *= 1 - this.shieldResist; // común "+Resistencia"
     if (this.shield > 0) {
