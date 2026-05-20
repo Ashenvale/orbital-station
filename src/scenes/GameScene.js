@@ -1478,7 +1478,9 @@ export default class GameScene extends Phaser.Scene {
   // -- Agujero Negro (v0.7): atrae y daña en zona, con cooldown -------------
   tickBlackhole(dt) {
     const st = this.ws('blackhole');
-    if (!this.bhGfx) this.bhGfx = this.add.graphics().setDepth(5).setBlendMode(ADD);
+    // Sin ADD: así el núcleo puede ser OSCURO (un agujero de verdad), no un
+    // glow aditivo que se ve rojizo.
+    if (!this.bhGfx) this.bhGfx = this.add.graphics().setDepth(5);
     this.abilityTimers.bh = (this.abilityTimers.bh || 0) + dt;
     if (!this._bh && this.abilityTimers.bh >= st.cooldownMs) {
       const tg = this.nearestEnemy(this.scaledRange(MAX_RANGE));
@@ -1499,17 +1501,17 @@ export default class GameScene extends Phaser.Scene {
       this._bh = null;
       return;
     }
-    // Visual: núcleo brillante (disco de acreción) + borde tenue de la zona
-    // de atracción. Sin disco lleno (antes parecía un círculo grande sólido).
-    const spin = this.timeSurvived / 200;
-    this.bhGfx.lineStyle(1.5, 0xb36bff, 0.3); // límite de la zona (fino, tenue)
+    // Visual: NÚCLEO OSCURO (el agujero) + delgado disco de acreción + borde
+    // tenue de la zona de atracción. Nada de relleno aditivo rojizo.
+    const spin = this.timeSurvived / 220;
+    this.bhGfx.lineStyle(1, 0x5a3f8c, 0.18); // límite de la zona (fino, tenue)
     this.bhGfx.strokeCircle(bh.x, bh.y, st.radius);
-    this.bhGfx.lineStyle(1, 0x8a4fd6, 0.18); // remolino intermedio
-    this.bhGfx.strokeCircle(bh.x, bh.y, st.radius * 0.62);
-    this.bhGfx.lineStyle(3, 0xc792ff, 0.9); // disco de acreción
-    this.bhGfx.strokeCircle(bh.x, bh.y, 15 + Math.sin(spin) * 2);
-    this.bhGfx.fillStyle(0xe0c2ff, 0.55); // núcleo
-    this.bhGfx.fillCircle(bh.x, bh.y, 6);
+    this.bhGfx.fillStyle(0x07030f, 0.95); // el "agujero" (núcleo oscuro)
+    this.bhGfx.fillCircle(bh.x, bh.y, 17);
+    this.bhGfx.lineStyle(2.5, 0x7d5cff, 0.85); // disco de acreción (anillo)
+    this.bhGfx.strokeCircle(bh.x, bh.y, 17 + Math.sin(spin) * 1.5);
+    this.bhGfx.lineStyle(1, 0x9a7bff, 0.4); // brillo interno fino
+    this.bhGfx.strokeCircle(bh.x, bh.y, 11);
     this.enemies.children.iterate((e) => {
       if (!e || !e.active) return;
       const dx = bh.x - e.x;
