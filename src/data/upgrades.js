@@ -80,7 +80,7 @@ export const WEAPONS = {
     type: 'kinetic',
     color: 0xc792ff,
     unlock: null,
-    base: { orbs: 1, damage: 7, radius: 96, speed: 2.4, orbSize: 7 },
+    base: { orbs: 1, damage: 7, radius: 116, speed: 2.4, orbSize: 7 },
     commons: [
       C('dmg', 3, '+Daño', '+Damage', '+20% daño de contacto.', '+20% contact damage.'),
       C('orb', 2, '+Orbe', '+Orb', '+1 orbe. Daño −10%/stack.', '+1 orb. Damage −10%/stack.', true),

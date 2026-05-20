@@ -44,7 +44,7 @@ export const ENEMY_CATALOG = {
   // -- Rocas y sondas (niveles tempranos) -----------------------------------
   debris: {
     color: 0x9fc4bb,
-    hp: 8, speed: 34, contactDmg: 6, xp: 4, radius: 12, weight: 1.3,
+    hp: 8, speed: 50, contactDmg: 6, xp: 4, radius: 12, weight: 1.3,
     move: 'straight',
     shape: (r) => poly(6, r, 0, 0.34)
   },
