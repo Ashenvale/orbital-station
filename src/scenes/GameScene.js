@@ -1200,36 +1200,9 @@ export default class GameScene extends Phaser.Scene {
     });
     if (!inRange.length) return;
     inRange.sort((a, b) => a.d - b.d);
+
+    // PRINCIPAL (siempre): haz(es) que apuntan al más cercano + refracción.
     const lit = new Set();
-    if (st.special.sweep) {
-      // "Barrido": uno o más rayos (st.beams) que GIRAN desde la base hasta
-      // el alcance, dañando todo lo que cruzan. La refracción ramifica desde
-      // los barridos. (Reemplaza la perforación.)
-      const nBeams = Math.max(1, st.beams);
-      const baseA = (this.timeSurvived / 1000) * 2.0; // ~115°/s de giro
-      const hits = [];
-      for (let bI = 0; bI < nBeams; bI++) {
-        const ang = baseA + (bI / nBeams) * Math.PI * 2;
-        const ux = Math.cos(ang);
-        const uy = Math.sin(ang);
-        this.drawLaserSeg(CX, CY, CX + ux * range, CY + uy * range, 4);
-        this.enemies.children.iterate((e) => {
-          if (!e || !e.active || e._untargetable || lit.has(e)) return;
-          const tproj = (e.x - CX) * ux + (e.y - CY) * uy;
-          if (tproj < 0 || tproj > range) return;
-          const perp = Math.abs((e.x - CX) * uy - (e.y - CY) * ux);
-          if (perp <= 18) {
-            this.damageEnemy(e, tick, 'energy');
-            lit.add(e);
-            hits.push(e);
-          }
-        });
-      }
-      if (st.refract > 0 && hits.length) this.laserBranch(hits, tick, lit, st.refract);
-      return;
-    }
-    // Haces independientes a daño pleno (base 1, +1 con especial "Doble").
-    // Cada haz REFRACTA: salta a otro cercano con daño decreciente (0.6^k).
     const beams = Math.min(inRange.length, st.beams);
     for (let bI = 0; bI < beams; bI++) {
       const cur = inRange[bI].e;
@@ -1238,6 +1211,29 @@ export default class GameScene extends Phaser.Scene {
       this.damageEnemy(cur, tick, 'energy');
       this.drawLaser(cur, 3); // estación -> objetivo (haz pleno)
       this.laserChain(cur.x, cur.y, tick, lit, st.refract);
+    }
+
+    // SECUNDARIO (especial "Barrido"): láser(es) extra que GIRAN desde la
+    // base hasta el alcance, dañando todo lo que cruzan. Uno por haz.
+    if (st.special.sweep) {
+      const nBeams = Math.max(1, st.beams);
+      const baseA = (this.timeSurvived / 1000) * 2.0; // ~115°/s
+      const sLit = new Set(); // independiente del principal (es otro láser)
+      for (let bI = 0; bI < nBeams; bI++) {
+        const ang = baseA + (bI / nBeams) * Math.PI * 2;
+        const ux = Math.cos(ang);
+        const uy = Math.sin(ang);
+        this.drawLaserSeg(CX, CY, CX + ux * range, CY + uy * range, 3);
+        this.enemies.children.iterate((e) => {
+          if (!e || !e.active || e._untargetable || sLit.has(e)) return;
+          const tproj = (e.x - CX) * ux + (e.y - CY) * uy;
+          if (tproj < 0 || tproj > range) return;
+          if (Math.abs((e.x - CX) * uy - (e.y - CY) * ux) <= 18) {
+            this.damageEnemy(e, tick, 'energy');
+            sLit.add(e);
+          }
+        });
+      }
     }
   }
 
