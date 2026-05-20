@@ -6,9 +6,30 @@
 // ---------------------------------------------------------------------------
 const KEY = 'os_lang';
 export const LANGS = ['en', 'es', 'pt'];
+
+// Idioma del navegador -> es/pt/en (default en). Solo se usa si el jugador
+// NO eligió idioma manualmente todavía (no hay 'os_lang' guardado).
+function detectLang() {
+  try {
+    const navs =
+      typeof navigator !== 'undefined' && navigator.languages && navigator.languages.length
+        ? navigator.languages
+        : [typeof navigator !== 'undefined' ? navigator.language || '' : ''];
+    for (const l of navs) {
+      const code = String(l).toLowerCase().slice(0, 2);
+      if (code === 'es') return 'es';
+      if (code === 'pt') return 'pt';
+      if (code === 'en') return 'en';
+    }
+  } catch (e) {
+    /* sin navigator (tests/node): default */
+  }
+  return 'en';
+}
+
 let lang = (() => {
   const s = localStorage.getItem(KEY);
-  return LANGS.includes(s) ? s : 'en';
+  return LANGS.includes(s) ? s : detectLang();
 })();
 
 const STR = {
