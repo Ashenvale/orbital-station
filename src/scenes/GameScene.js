@@ -1499,13 +1499,17 @@ export default class GameScene extends Phaser.Scene {
       this._bh = null;
       return;
     }
-    // Visual
-    this.bhGfx.fillStyle(0xb36bff, 0.18);
-    this.bhGfx.fillCircle(bh.x, bh.y, st.radius);
-    this.bhGfx.fillStyle(0x10081f, 0.9);
-    this.bhGfx.fillCircle(bh.x, bh.y, 10);
-    this.bhGfx.lineStyle(2, 0xb36bff, 0.8);
+    // Visual: núcleo brillante (disco de acreción) + borde tenue de la zona
+    // de atracción. Sin disco lleno (antes parecía un círculo grande sólido).
+    const spin = this.timeSurvived / 200;
+    this.bhGfx.lineStyle(1.5, 0xb36bff, 0.3); // límite de la zona (fino, tenue)
     this.bhGfx.strokeCircle(bh.x, bh.y, st.radius);
+    this.bhGfx.lineStyle(1, 0x8a4fd6, 0.18); // remolino intermedio
+    this.bhGfx.strokeCircle(bh.x, bh.y, st.radius * 0.62);
+    this.bhGfx.lineStyle(3, 0xc792ff, 0.9); // disco de acreción
+    this.bhGfx.strokeCircle(bh.x, bh.y, 15 + Math.sin(spin) * 2);
+    this.bhGfx.fillStyle(0xe0c2ff, 0.55); // núcleo
+    this.bhGfx.fillCircle(bh.x, bh.y, 6);
     this.enemies.children.iterate((e) => {
       if (!e || !e.active) return;
       const dx = bh.x - e.x;
