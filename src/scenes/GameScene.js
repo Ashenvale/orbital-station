@@ -2140,8 +2140,9 @@ export default class GameScene extends Phaser.Scene {
       const open = specialSlotsOpen(this.up, wid);
       const pendingSp = W.specials.filter((sp) => !s.specials.includes(sp.id));
       if (s.specials.length < open && pendingSp.length) {
-        for (const sp of pendingSp)
-          choices.push(this._mkChoice({ wid, kind: 'special', id: sp.id }));
+        // Una especial pendiente AL AZAR (como en el draft real), no todas.
+        const sp = pendingSp[Math.floor(Math.random() * pendingSp.length)];
+        choices.push(this._mkChoice({ wid, kind: 'special', id: sp.id }));
       } else if (s.totalCommons < CAP_COMMON) {
         for (const c of W.commons)
           if ((s.commons[c.id] || 0) < c.max)
