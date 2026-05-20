@@ -1201,40 +1201,31 @@ export default class GameScene extends Phaser.Scene {
     if (!inRange.length) return;
     inRange.sort((a, b) => a.d - b.d);
     const lit = new Set();
-    if (st.special.pierceall) {
-      // "Perforación total": rayo RECTO que atraviesa a todos en su línea.
-      // Sinergia: con "Doble láser" se disparan `st.beams` líneas (cada una
-      // apunta a un objetivo distinto); con "+Refracción" cada línea rebota
-      // desde su último enemigo perforado.
+    if (st.special.sweep) {
+      // "Barrido": uno o más rayos (st.beams) que GIRAN desde la base hasta
+      // el alcance, dañando todo lo que cruzan. La refracción ramifica desde
+      // los barridos. (Reemplaza la perforación.)
       const nBeams = Math.max(1, st.beams);
-      let used = 0;
-      for (let bI = 0; bI < inRange.length && used < nBeams; bI++) {
-        const aim = inRange[bI].e;
-        if (lit.has(aim)) continue;
-        used++;
-        const ang = Math.atan2(aim.y - CY, aim.x - CX);
+      const baseA = (this.timeSurvived / 1000) * 2.0; // ~115°/s de giro
+      const hits = [];
+      for (let bI = 0; bI < nBeams; bI++) {
+        const ang = baseA + (bI / nBeams) * Math.PI * 2;
         const ux = Math.cos(ang);
         const uy = Math.sin(ang);
-        const ex = CX + ux * range;
-        const ey = CY + uy * range;
-        const lineHits = [];
-        for (const { e } of inRange) {
-          if (lit.has(e)) continue;
+        this.drawLaserSeg(CX, CY, CX + ux * range, CY + uy * range, 4);
+        this.enemies.children.iterate((e) => {
+          if (!e || !e.active || e._untargetable || lit.has(e)) return;
           const tproj = (e.x - CX) * ux + (e.y - CY) * uy;
-          if (tproj < 0 || tproj > range) continue;
+          if (tproj < 0 || tproj > range) return;
           const perp = Math.abs((e.x - CX) * uy - (e.y - CY) * ux);
-          if (perp <= 24) {
-            this.damageEnemy(e, tick, 'energy'); // PERFORA toda la línea
+          if (perp <= 18) {
+            this.damageEnemy(e, tick, 'energy');
             lit.add(e);
-            lineHits.push(e);
+            hits.push(e);
           }
-        }
-        this.drawLaserSeg(CX, CY, ex, ey, 5); // haz largo y visible
-        // Y SIMULTÁNEO refracta: ramas que saltan desde los perforados.
-        if (st.refract > 0 && lineHits.length) {
-          this.laserBranch(lineHits, tick, lit, st.refract);
-        }
+        });
       }
+      if (st.refract > 0 && hits.length) this.laserBranch(hits, tick, lit, st.refract);
       return;
     }
     // Haces independientes a daño pleno (base 1, +1 con especial "Doble").

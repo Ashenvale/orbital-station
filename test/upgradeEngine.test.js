@@ -102,7 +102,7 @@ test('weaponStats laser: refract es común, beam2 es especial', () => {
   s = weaponStats('laser', st);
   assert.equal(s.refract, 1);
   assert.equal(s.beams, 2);
-  assert.equal(s.special.pierceall, false);
+  assert.equal(s.special.sweep, false);
 });
 
 test('weaponStats cannon: +Daño escala, +Proyectil suma, especiales flags', () => {
@@ -155,9 +155,9 @@ test('occupiesSlot: cannon (baseSlotFree) solo tras 1ª mejora; otras al tenerla
 test('applyUpg special: idempotente (no duplica)', () => {
   const st = newUpgState();
   applyUpg(st, { wid: 'laser', kind: 'unlock', id: 'base' });
-  applyUpg(st, { wid: 'laser', kind: 'special', id: 'pierceall' });
-  applyUpg(st, { wid: 'laser', kind: 'special', id: 'pierceall' });
-  assert.deepEqual(st.laser.specials, ['pierceall']);
+  applyUpg(st, { wid: 'laser', kind: 'special', id: 'sweep' });
+  applyUpg(st, { wid: 'laser', kind: 'special', id: 'sweep' });
+  assert.deepEqual(st.laser.specials, ['sweep']);
 });
 
 test('draftPool: pesos positivos y kinds válidos', () => {

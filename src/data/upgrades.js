@@ -135,7 +135,7 @@ export const WEAPONS = {
     ],
     specials: [
       S('beam2', 'Doble láser', 'Twin laser', 'Un segundo rayo independiente a daño pleno.', 'A second independent beam at full damage.'),
-      S('pierceall', 'Perforación total', 'Full pierce', 'Atraviesa a todos en línea.', 'Pierces all enemies in line.'),
+      S('sweep', 'Barrido', 'Sweep', 'Un rayo que GIRA desde la base, dañando todo lo que cruza (uno por haz).', 'A beam that SWEEPS from the base, hitting everything it crosses (one per beam).'),
       S('overcharge', 'Sobrecarga', 'Overcharge', 'Sin enfriamiento: el rayo es continuo.', 'No cooldown: the beam is continuous.')
     ]
   },

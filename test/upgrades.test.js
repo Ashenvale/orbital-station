@@ -61,7 +61,7 @@ test('cardMeta: unlock / common / special', () => {
   assert.equal(c.special, false);
   assert.ok(c.title.length > 0 && c.desc.length > 0);
 
-  const s = cardMeta('laser', 'special', 'pierceall');
+  const s = cardMeta('laser', 'special', 'sweep');
   assert.equal(s.special, true);
 });
 
