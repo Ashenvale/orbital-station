@@ -1595,10 +1595,13 @@ export default class GameScene extends Phaser.Scene {
     this.orbs = [];
     if (!this.up.orbital.owned) return;
     const st = this.ws('orbital');
+    // Tamaño del orbe (círculo de daño) = st.orbSize. La textura tex_orb
+    // tiene ~12px de radio: escalamos el sprite y el body acompaña.
+    const sc = st.orbSize / 12;
     for (let i = 0; i < st.orbs; i++) {
       const o = this.orbsGroup.create(CX, CY, 'tex_orb');
-      o.setBlendMode(ADD).setDepth(4);
-      o.body.setCircle(7, o.width / 2 - 7, o.height / 2 - 7);
+      o.setBlendMode(ADD).setDepth(4).setScale(sc);
+      o.body.setCircle(12); // radio natural; escala con setScale
       o.body.setAllowGravity(false);
       o.idx = i;
       this.orbs.push(o);
