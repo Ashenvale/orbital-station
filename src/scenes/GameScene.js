@@ -44,15 +44,22 @@ const ADD = Phaser.BlendModes.ADD;
 
 // Arcade infinito: cada escalón de dificultad (cada `stepSeconds`) además de
 // subir vida/cadencia DESBLOQUEA nuevos tipos de enemigo.
+// Arcade infinito: UN tipo nuevo por escalón (como ir entre niveles), del
+// más débil al más fuerte. Los duros aparecen mucho más tarde, no de entrada.
 const ENDLESS_TIERS = [
   { from: 0, ids: ['debris', 'asteroid'] },
-  { from: 1, ids: ['missile', 'probe'] },
-  { from: 2, ids: ['ship'] },
-  { from: 3, ids: ['interceptor', 'swarm'] },
-  { from: 4, ids: ['armored', 'bomb'] },
-  { from: 5, ids: ['berserker', 'stealth'] },
-  { from: 6, ids: ['healer', 'shielder'] },
-  { from: 7, ids: ['carrier'] }
+  { from: 1, ids: ['probe'] },
+  { from: 2, ids: ['missile'] },
+  { from: 3, ids: ['ship'] },
+  { from: 4, ids: ['interceptor'] },
+  { from: 5, ids: ['swarm'] },
+  { from: 6, ids: ['bomb'] },
+  { from: 7, ids: ['armored'] },
+  { from: 8, ids: ['stealth'] },
+  { from: 9, ids: ['berserker'] },
+  { from: 10, ids: ['healer'] },
+  { from: 11, ids: ['shielder'] },
+  { from: 12, ids: ['carrier'] }
 ];
 
 export default class GameScene extends Phaser.Scene {
@@ -90,9 +97,9 @@ export default class GameScene extends Phaser.Scene {
       this.levelNum = 0;
       this.targetKills = 0;
       this.lvlMul = { hp: 1, speed: 1, spawn: 1 };
-      // Arcade: escala LENTO. Cada escalón (22 s) sube vida/cadencia y
-      // desbloquea un tipo de enemigo más fuerte (empieza con piedras).
-      this.stepSeconds = 22;
+      // Arcade: escala LENTO. Cada escalón (26 s) sube vida y desbloquea UN
+      // tipo de enemigo más fuerte (empieza con piedras; los duros, tarde).
+      this.stepSeconds = 26;
       // Arcade: el pool se calcula por escalón (desbloqueo progresivo).
       this.enemyPool = null;
       this.bossId = null;
