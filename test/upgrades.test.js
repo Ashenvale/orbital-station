@@ -22,7 +22,7 @@ test('catálogo: 8 armas con estructura consistente', () => {
     assert.equal(typeof W.color, 'number');
     assert.ok(W.base && typeof W.base === 'object');
     assert.ok(Array.isArray(W.commons) && W.commons.length >= 1);
-    assert.equal(W.specials.length, 3);
+    assert.ok(W.specials.length >= 3); // 3 por arma (el escudo tiene 4)
     const cids = W.commons.map((c) => c.id);
     assert.equal(new Set(cids).size, cids.length, `${id} comunes únicos`);
     for (const c of W.commons) assert.ok(c.max >= 1);

@@ -1313,9 +1313,9 @@ export default class GameScene extends Phaser.Scene {
     this._shieldBurst = !!st.special.burst;
     if (this.shield < this.shieldMax)
       this.shield = Math.min(this.shieldMax, this.shield + st.regenPerSec * (dt / 1000));
-    // Común "+Reparación": cura el casco lentamente.
-    if (st.repair > 0 && this.hp < this.maxHp)
-      this.hp = Math.min(this.maxHp, this.hp + st.repair * (dt / 1000));
+    // ESPECIAL "Reparación": cura el casco lentamente (6 HP/s).
+    if (st.special.repair && this.hp < this.maxHp)
+      this.hp = Math.min(this.maxHp, this.hp + 6 * (dt / 1000));
     const ratio = this.shieldMax > 0 ? this.shield / this.shieldMax : 0;
     this.shieldFx.setFillStyle(COLORS.shield, 0.05 + ratio * 0.2);
     this.shieldFx.setStrokeStyle(1.5, COLORS.shield, 0.2 + ratio * 0.6);

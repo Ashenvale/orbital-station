@@ -131,7 +131,6 @@ export function weaponStats(wid, st) {
       out.shieldMax = Math.round(b.shieldMax * (1 + 0.25 * S('cap')));
       out.regenPerSec = b.regenPerSec * (1 + 0.2 * S('regen'));
       out.resist = Math.min(0.6, 0.05 * S('resist'));
-      out.repair = 4 * S('repair'); // HP/s de reparación del casco
       break;
     case 'drone':
       out.damage = b.damage * (1 + 0.18 * S('dmg')) * qm;
