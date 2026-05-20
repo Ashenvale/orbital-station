@@ -768,17 +768,21 @@ export default class GameScene extends Phaser.Scene {
     const spd = e.baseSpeed;
     e.rotation = Math.atan2(dy, dx) + Math.PI / 2;
     e._atkT += dt;
+    // No dispara si está demasiado cerca: el proyectil sería inesquivable /
+    // imposible de interceptar. Solo tira desde lejos (deja tiempo).
+    const MIN_FIRE = 150;
+    const canFire = e._atkT >= fl.fireMs && d >= MIN_FIRE;
 
     if (fl.bossKind === 'orbital') {
       // Distancia que OSCILA (se aleja y se arrima) en vez de fija.
       const R = Phaser.Math.Clamp(
         fl.orbitR + Math.sin(now / 1200 + e.zzPhase) * 45,
-        90,
+        120,
         MAX_RANGE - 12
       );
       const radial = Phaser.Math.Clamp((R - d) * 1.6, -spd, spd);
       e.body.setVelocity(tx * spd - ux * radial, ty * spd - uy * radial);
-      if (e._atkT >= fl.fireMs) {
+      if (canFire) {
         e._atkT = 0;
         this.bossFire(e, fl.shotDmg, 1, fl);
       }
@@ -791,7 +795,7 @@ export default class GameScene extends Phaser.Scene {
       );
       const radial = Phaser.Math.Clamp((R - d) * 1.4, -spd, spd);
       e.body.setVelocity(tx * spd * 0.5 - ux * radial, ty * spd * 0.5 - uy * radial);
-      if (e._atkT >= fl.fireMs) {
+      if (canFire) {
         e._atkT = 0;
         this.bossFire(e, fl.shotDmg, fl.volley, fl);
       }
@@ -811,7 +815,7 @@ export default class GameScene extends Phaser.Scene {
         this.cameras.main.flash(120, 150, 80, 255);
       }
       e.body.setVelocity(tx * spd * (warping ? 0 : 0.6), ty * spd * (warping ? 0 : 0.6));
-      if (!warping && e._atkT >= fl.fireMs) {
+      if (!warping && canFire) {
         e._atkT = 0;
         this.bossFire(e, fl.shotDmg, fl.spread, fl);
       }
