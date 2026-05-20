@@ -28,6 +28,7 @@ import {
   specialSlotsOpen
 } from '../upgradeEngine.js';
 import { Economy } from '../economy.js';
+import { Analytics } from '../analytics.js';
 import {
   shipDamageMul,
   shipRateMul,
@@ -123,6 +124,7 @@ export default class GameScene extends Phaser.Scene {
       this.mode = 'endless'; // spawn indefinido
       this.bossCount = 99; // el selector ofrece TODAS las armas
     }
+    if (!this.dev) Analytics.track('run_start', { mode: this.mode, level: this.levelNum });
 
     // -- Módulos permanentes de la nave (comprados con oro) -----------------
     this.abilRateMul = shipAtkSpdMul(Economy.powerLevel('sh_atkspd'));
@@ -767,20 +769,27 @@ export default class GameScene extends Phaser.Scene {
     e._atkT += dt;
 
     if (fl.bossKind === 'orbital') {
-      const R = Math.min(fl.orbitR, MAX_RANGE - 20);
-      const radial = Phaser.Math.Clamp((R - d) * 1.6, -spd, spd); // mantener R
+      // Distancia que OSCILA (se aleja y se arrima) en vez de fija.
+      const R = Phaser.Math.Clamp(
+        fl.orbitR + Math.sin(now / 1200 + e.zzPhase) * 45,
+        90,
+        MAX_RANGE - 12
+      );
+      const radial = Phaser.Math.Clamp((R - d) * 1.6, -spd, spd);
       e.body.setVelocity(tx * spd - ux * radial, ty * spd - uy * radial);
       if (e._atkT >= fl.fireMs) {
         e._atkT = 0;
         this.bossFire(e, fl.shotDmg, 1, fl);
       }
     } else if (fl.bossKind === 'siege') {
-      const R = fl.holdR;
-      if (d > R + 6) {
-        e.body.setVelocity(ux * spd, uy * spd); // avanza
-      } else {
-        e.body.setVelocity(tx * spd * 0.35, ty * spd * 0.35); // se planta
-      }
+      // Acorazado lejano: avanza y retrocede alrededor de holdR (más lejos).
+      const R = Phaser.Math.Clamp(
+        fl.holdR + Math.sin(now / 1600 + e.zzPhase) * 50,
+        120,
+        MAX_RANGE - 8
+      );
+      const radial = Phaser.Math.Clamp((R - d) * 1.4, -spd, spd);
+      e.body.setVelocity(tx * spd * 0.5 - ux * radial, ty * spd * 0.5 - uy * radial);
       if (e._atkT >= fl.fireMs) {
         e._atkT = 0;
         this.bossFire(e, fl.shotDmg, fl.volley, fl);
@@ -794,7 +803,8 @@ export default class GameScene extends Phaser.Scene {
         e._blinkT = 0;
         e._warpUntil = now + 260; // breve fase de salto (intargeteable)
         const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
-        const rr = 138; // dentro del alcance de las armas (no se va lejos)
+        // Lejos y variable: proyectiles más interceptables.
+        const rr = Phaser.Math.Clamp((fl.blinkR || 190) + Phaser.Math.Between(-40, 40), 130, MAX_RANGE - 8);
         e.x = CX + Math.cos(a) * rr;
         e.y = CY + Math.sin(a) * rr;
         this.cameras.main.flash(120, 150, 80, 255);
@@ -1580,9 +1590,11 @@ export default class GameScene extends Phaser.Scene {
         const dy = bh.y - e.y;
         const d = Math.hypot(dx, dy) || 1;
         if (d < st.radius) {
-          // Los jefes apenas se dejan absorber (no quedan pegados al centro).
-          const pm = e.flags && e.flags.boss ? 0.12 : 1;
-          e.body.setVelocity((dx / d) * st.pull * pm, (dy / d) * st.pull * pm);
+          // Los JEFES NO se dejan arrastrar (mantienen su IA, no se congelan);
+          // solo reciben daño. El resto sí es atraído.
+          if (!(e.flags && e.flags.boss)) {
+            e.body.setVelocity((dx / d) * st.pull, (dy / d) * st.pull);
+          }
           if (st.special.distort) e._distortUntil = this.timeSurvived + 200;
           this.damageEnemy(e, st.dps * (dt / 1000), 'gravity');
         }
@@ -1598,24 +1610,32 @@ export default class GameScene extends Phaser.Scene {
     // Tamaño del orbe (círculo de daño) = st.orbSize. La textura tex_orb
     // tiene ~12px de radio: escalamos el sprite y el body acompaña.
     const sc = st.orbSize / 12;
-    for (let i = 0; i < st.orbs; i++) {
-      const o = this.orbsGroup.create(CX, CY, 'tex_orb');
-      o.setBlendMode(ADD).setDepth(4).setScale(sc);
-      o.body.setCircle(12); // radio natural; escala con setScale
-      o.body.setAllowGravity(false);
-      o.idx = i;
-      this.orbs.push(o);
+    // ESPECIAL "Anillo doble": un 2º grupo de orbes que gira al REVÉS.
+    const groups = st.special.double ? 2 : 1;
+    for (let g = 0; g < groups; g++) {
+      for (let i = 0; i < st.orbs; i++) {
+        const o = this.orbsGroup.create(CX, CY, 'tex_orb');
+        o.setBlendMode(ADD).setDepth(4).setScale(sc);
+        o.body.setCircle(12); // radio natural; escala con setScale
+        o.body.setAllowGravity(false);
+        o.idx = i;
+        o.reversed = g === 1;
+        this.orbs.push(o);
+      }
     }
   }
 
   updateOrbs(dt) {
     if (!this.up.orbital.owned) return;
     const st = this.ws('orbital');
-    if (this.orbs.length !== st.orbs) this.rebuildOrbs();
+    const want = st.orbs * (st.special.double ? 2 : 1);
+    if (this.orbs.length !== want) this.rebuildOrbs();
     this._orbBaseAng = (this._orbBaseAng || 0) + st.speed * (dt / 1000);
-    const n = this.orbs.length;
-    this.orbs.forEach((o, i) => {
-      const a = this._orbBaseAng + (i / n) * Math.PI * 2;
+    const per = st.orbs || 1;
+    this.orbs.forEach((o) => {
+      const dir = o.reversed ? -1 : 1; // el 2º anillo gira al revés
+      const off = o.reversed ? Math.PI / per : 0; // intercalado
+      const a = this._orbBaseAng * dir + (o.idx / per) * Math.PI * 2 + off;
       o.x = CX + Math.cos(a) * st.radius;
       o.y = CY + Math.sin(a) * st.radius;
     });
@@ -1838,6 +1858,11 @@ export default class GameScene extends Phaser.Scene {
           if (before < 3 && after >= 3) this.announceUnlock('blackhole');
           // NO termina el nivel solo: el chequeo combinado vive en update().
           this._bossKilled = true;
+          Analytics.track('boss_killed', {
+            boss: enemy.enemyType,
+            mode: this.mode,
+            level: this.levelNum
+          });
         }
       }
     }
@@ -2219,6 +2244,7 @@ export default class GameScene extends Phaser.Scene {
 
   chooseDraft(id) {
     this._applyCard(id);
+    Analytics.track('upgrade_picked', { id, level: this.level });
     this.pendingLevelUps = Math.max(0, this.pendingLevelUps - 1);
     if (this.pendingLevelUps > 0) this.openDraft();
     else this._resumeFromDraft();
@@ -2280,6 +2306,13 @@ export default class GameScene extends Phaser.Scene {
       level: this.level,
       gold: this.gold
     });
+    Analytics.track('game_over', {
+      mode: this.mode,
+      level: this.levelNum,
+      time_s: Math.round(this.timeSurvived / 1000),
+      kills: this.kills,
+      playerLevel: this.level
+    });
   }
 
   // "Un poco de aire": al caer el último enemigo el juego sigue ~1s (se ven
@@ -2318,6 +2351,13 @@ export default class GameScene extends Phaser.Scene {
       starBest: sr.best,
       starGold: sr.gold,
       next: Progress.nextLevel(this.levelNum)
+    });
+    Analytics.track('level_clear', {
+      level: this.levelNum,
+      time_s: Math.round(this.timeSurvived / 1000),
+      kills: this.kills,
+      stars,
+      gold: this.gold
     });
   }
 

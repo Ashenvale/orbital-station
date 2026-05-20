@@ -140,7 +140,7 @@ export const ENEMY_CATALOG = {
     move: 'boss',
     flags: {
       boss: true, bossKind: 'orbital', dmgMul: 0.8,
-      orbitR: 135, fireMs: 1500, shotDmg: 8,
+      orbitR: 155, fireMs: 1500, shotDmg: 8,
       carrier: 'drone', droneEveryMs: 3400, droneCount: 3
     },
     shape: (r) => [
@@ -158,7 +158,7 @@ export const ENEMY_CATALOG = {
     move: 'boss',
     flags: {
       boss: true, bossKind: 'siege', dmgMul: 0.55,
-      holdR: 130, fireMs: 1900, volley: 3, shotDmg: 7
+      holdR: 185, fireMs: 1900, volley: 3, shotDmg: 7
     },
     shape: (r) => [
       [-r, -r * 0.7], [r, -r * 0.7], [r * 0.85, 0], [r, r * 0.7],
@@ -174,7 +174,7 @@ export const ENEMY_CATALOG = {
     move: 'boss',
     flags: {
       boss: true, bossKind: 'warp', dmgMul: 0.75,
-      blinkMs: 2400, fireMs: 1300, spread: 3, shotDmg: 9,
+      blinkMs: 2400, blinkR: 195, fireMs: 1300, spread: 3, shotDmg: 9,
       carrier: 'interceptor', droneEveryMs: 4200, droneCount: 2
     },
     shape: (r) => [

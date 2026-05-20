@@ -6,6 +6,10 @@ import UIScene from './scenes/UIScene.js';
 import AbilitiesScene from './scenes/AbilitiesScene.js';
 import LevelsScene from './scenes/LevelsScene.js';
 import CreditsScene from './scenes/CreditsScene.js';
+import { Analytics } from './analytics.js';
+import { Lang } from './i18n.js';
+import { Economy } from './economy.js';
+import { Progress } from './progress.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -31,3 +35,10 @@ const config = {
 
 // eslint-disable-next-line no-new
 new Phaser.Game(config);
+
+// Métricas: una "app_loaded" por carga (anónima; no envía en local-dev).
+Analytics.appLoaded({
+  lang: Lang.get(),
+  gold: Economy.gold(),
+  completedLevels: Progress.completed()
+});
