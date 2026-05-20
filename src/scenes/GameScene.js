@@ -992,7 +992,7 @@ export default class GameScene extends Phaser.Scene {
     b.explode = false;
     b.bounce = 0;
     b.slowMs = 0;
-    b.bossMul = 1;
+    b.knockback = 0;
     b._spd = speed;
     if (b._hit) b._hit.clear();
     else b._hit = new Set();
@@ -1044,7 +1044,7 @@ export default class GameScene extends Phaser.Scene {
         b.setTint(0xa0f0ff);
         b._dieAt = this.timeSurvived + life;
         if (st.special.shock) b.slowMs = 1500;
-        if (st.special.antimatter) b.bossMul = 3;
+        if (st.special.knockback) b.knockback = 22;
       }
       // Fogonazo del cañón.
       const fx = this.getGlow();
@@ -1553,10 +1553,16 @@ export default class GameScene extends Phaser.Scene {
   onBulletHit(bullet, enemy) {
     if (!bullet.active || !enemy.active || bullet._hit.has(enemy)) return;
     bullet._hit.add(enemy);
-    let dmg = bullet.damage;
-    if (bullet.bossMul && enemy.flags && enemy.flags.boss) dmg *= bullet.bossMul; // antimateria
-    this.damageEnemy(enemy, dmg, bullet.dmgType);
+    this.damageEnemy(enemy, bullet.damage, bullet.dmgType);
     if (bullet.slowMs) enemy.slowUntil = this.timeSurvived + bullet.slowMs; // sobrecarga
+    if (bullet.knockback) {
+      // Empuje hacia AFUERA (lejos de la estación).
+      const kx = enemy.x - CX;
+      const ky = enemy.y - CY;
+      const kd = Math.hypot(kx, ky) || 1;
+      enemy.x += (kx / kd) * bullet.knockback;
+      enemy.y += (ky / kd) * bullet.knockback;
+    }
     if (bullet.explode) this.plasmaField(bullet.x, bullet.y, bullet.damage, 'kinetic', 40);
     if (bullet.pierce > 0) {
       bullet.pierce--;

@@ -207,7 +207,7 @@ export const WEAPONS = {
     specials: [
       S('twin', 'Doble cargador', 'Double tap', 'Dispara 2 ráfagas seguidas.', 'Fires two blasts in a row.'),
       S('shock', 'Sobrecarga', 'Shock', 'Ralentiza 1.5s a los impactados.', 'Slows hit enemies 1.5s.'),
-      S('antimatter', 'Antimateria', 'Antimatter', '×3 daño contra jefes.', '×3 damage vs bosses.')
+      S('knockback', 'Retroceso', 'Knockback', 'Empuja hacia atrás a los impactados.', 'Pushes hit enemies back.')
     ]
   },
 
