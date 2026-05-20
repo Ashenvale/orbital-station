@@ -1482,12 +1482,27 @@ export default class GameScene extends Phaser.Scene {
     if (!this.bhGfx) this.bhGfx = this.add.graphics().setDepth(5); // sin ADD
     if (!this._bhs) this._bhs = [];
     this.abilityTimers.bh = (this.abilityTimers.bh || 0) + dt;
-    // Invoca otro agujero (hasta st.count) cuando el cooldown está listo.
-    if (this._bhs.length < st.count && this.abilityTimers.bh >= st.cooldownMs) {
-      const tg = this.nearestEnemy(this.scaledRange(MAX_RANGE));
-      if (tg) {
+    // Cada cooldown invoca de golpe los que falten hasta st.count (en los
+    // enemigos más cercanos). Así "+Agujero" sí muestra varios a la vez,
+    // aunque cada uno dure menos que el cooldown.
+    const need = st.count - this._bhs.length;
+    if (need > 0 && this.abilityTimers.bh >= st.cooldownMs) {
+      const range = this.scaledRange(MAX_RANGE);
+      const inR = [];
+      this.enemies.children.iterate((e) => {
+        if (!e || !e.active || e._untargetable) return;
+        const d = Math.hypot(e.x - CX, e.y - CY);
+        if (d <= range) inR.push({ e, d });
+      });
+      if (inR.length) {
         this.abilityTimers.bh = 0;
-        this._bhs.push({ x: tg.x, y: tg.y, end: this.timeSurvived + st.durationMs });
+        inR.sort((a, b) => a.d - b.d);
+        for (let k = 0; k < need; k++) {
+          const t = inR[k % inR.length].e; // si hay menos enemigos, repite con offset
+          const ox = k < inR.length ? 0 : Phaser.Math.Between(-40, 40);
+          const oy = k < inR.length ? 0 : Phaser.Math.Between(-40, 40);
+          this._bhs.push({ x: t.x + ox, y: t.y + oy, end: this.timeSurvived + st.durationMs });
+        }
       }
     }
     this.bhGfx.clear();
