@@ -1217,25 +1217,22 @@ export default class GameScene extends Phaser.Scene {
         const uy = Math.sin(ang);
         const ex = CX + ux * range;
         const ey = CY + uy * range;
-        let farthest = aim;
-        let farT = -1;
+        const lineHits = [];
         for (const { e } of inRange) {
           if (lit.has(e)) continue;
           const tproj = (e.x - CX) * ux + (e.y - CY) * uy;
           if (tproj < 0 || tproj > range) continue;
           const perp = Math.abs((e.x - CX) * uy - (e.y - CY) * ux);
           if (perp <= 24) {
-            this.damageEnemy(e, tick, 'energy');
+            this.damageEnemy(e, tick, 'energy'); // PERFORA toda la línea
             lit.add(e);
-            if (tproj > farT) {
-              farT = tproj;
-              farthest = e;
-            }
+            lineHits.push(e);
           }
         }
         this.drawLaserSeg(CX, CY, ex, ey, 5); // haz largo y visible
-        if (st.refract > 0 && farthest) {
-          this.laserChain(farthest.x, farthest.y, tick, lit, st.refract);
+        // Y SIMULTÁNEO refracta: ramas que saltan desde los perforados.
+        if (st.refract > 0 && lineHits.length) {
+          this.laserBranch(lineHits, tick, lit, st.refract);
         }
       }
       return;
@@ -1269,6 +1266,21 @@ export default class GameScene extends Phaser.Scene {
       }
     });
     return best;
+  }
+
+  // Refracción RAMIFICADA: `refract` saltos que salen desde los enemigos
+  // perforados (ciclando entre ellos) hacia otros cercanos no golpeados.
+  // Se ve perforar + saltar a la vez.
+  laserBranch(sources, tick, lit, refract) {
+    for (let k = 1; k <= refract; k++) {
+      const src = sources[(k - 1) % sources.length];
+      if (!src || !src.active) continue;
+      const nxt = this._laserJumpTarget(src.x, src.y, lit);
+      if (!nxt) continue;
+      lit.add(nxt);
+      this.damageEnemy(nxt, tick * Math.pow(0.6, k), 'energy');
+      this.drawLaserSeg(src.x, src.y, nxt.x, nxt.y, 2);
+    }
   }
 
   // Cadena de refracción desde (sx,sy): `refract` saltos, daño 0.6^k.
