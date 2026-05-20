@@ -220,9 +220,10 @@ export const WEAPONS = {
     type: 'gravity',
     color: 0xb36bff,
     unlock: 'boss3',
-    base: { dps: 18, durationMs: 2000, radius: 90, cooldownMs: 6000, pull: 36 },
+    base: { dps: 18, durationMs: 2000, radius: 90, cooldownMs: 6000, pull: 26 },
     commons: [
       C('dmg', 3, '+Daño', '+Damage', '+25% daño/seg dentro.', '+25% dmg/s inside.'),
+      C('count', 2, '+Agujero', '+Black hole', '+1 agujero negro simultáneo.', '+1 simultaneous black hole.'),
       C('dur', 3, '+Duración', '+Duration', '+0.5s de duración.', '+0.5s duration.'),
       C('radius', 2, '+Radio', '+Radius', '+20% radio de atracción.', '+20% pull radius.'),
       C('cd', 3, '−Cooldown', '−Cooldown', '−15% entre invocaciones.', '−15% between casts.')

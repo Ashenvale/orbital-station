@@ -144,6 +144,7 @@ export function weaponStats(wid, st) {
       break;
     case 'blackhole':
       out.dps = b.dps * (1 + 0.25 * S('dmg'));
+      out.count = 1 + S('count'); // +Agujero: agujeros simultáneos
       out.durationMs = (b.durationMs + 500 * S('dur')) * (sp('singularity') ? 2 : 1);
       out.radius = b.radius * (1 + 0.2 * S('radius')) * (sp('singularity') ? 1.6 : 1);
       out.cooldownMs = b.cooldownMs * Math.pow(0.85, S('cd'));

@@ -155,7 +155,7 @@ export default class GameScene extends Phaser.Scene {
     this.orbs = [];
     this.drones = []; // dron(es) v0.7 (se reconstruyen por nivel)
     this._droneRespawnAt = null; // respawn en escuadrón (todos juntos)
-    this._bh = null; // agujero negro activo
+    this._bhs = []; // agujeros negros activos (puede haber +1 con la común)
     this.bhGfx = null;
 
     this.laserGfx = this.add.graphics().setDepth(6).setBlendMode(ADD);
@@ -1475,54 +1475,55 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  // -- Agujero Negro (v0.7): atrae y daña en zona, con cooldown -------------
+  // -- Agujero Negro (v0.7): atrae y daña en zona. La común +Agujero permite
+  //    tener varios simultáneos.
   tickBlackhole(dt) {
     const st = this.ws('blackhole');
-    // Sin ADD: así el núcleo puede ser OSCURO (un agujero de verdad), no un
-    // glow aditivo que se ve rojizo.
-    if (!this.bhGfx) this.bhGfx = this.add.graphics().setDepth(5);
+    if (!this.bhGfx) this.bhGfx = this.add.graphics().setDepth(5); // sin ADD
+    if (!this._bhs) this._bhs = [];
     this.abilityTimers.bh = (this.abilityTimers.bh || 0) + dt;
-    if (!this._bh && this.abilityTimers.bh >= st.cooldownMs) {
+    // Invoca otro agujero (hasta st.count) cuando el cooldown está listo.
+    if (this._bhs.length < st.count && this.abilityTimers.bh >= st.cooldownMs) {
       const tg = this.nearestEnemy(this.scaledRange(MAX_RANGE));
       if (tg) {
         this.abilityTimers.bh = 0;
-        this._bh = { x: tg.x, y: tg.y, end: this.timeSurvived + st.durationMs };
+        this._bhs.push({ x: tg.x, y: tg.y, end: this.timeSurvived + st.durationMs });
       }
     }
     this.bhGfx.clear();
-    if (!this._bh) return;
-    const bh = this._bh;
-    if (this.timeSurvived >= bh.end) {
-      if (st.special.implosion)
-        this.enemies.children.iterate((e) => {
-          if (e && e.active && Math.hypot(e.x - bh.x, e.y - bh.y) < st.radius)
-            this.damageEnemy(e, st.dps * 1.5, 'gravity');
-        });
-      this._bh = null;
-      return;
-    }
-    // Visual: NÚCLEO OSCURO (el agujero) + delgado disco de acreción + borde
-    // tenue de la zona de atracción. Nada de relleno aditivo rojizo.
     const spin = this.timeSurvived / 220;
-    this.bhGfx.lineStyle(1, 0x5a3f8c, 0.18); // límite de la zona (fino, tenue)
-    this.bhGfx.strokeCircle(bh.x, bh.y, st.radius);
-    this.bhGfx.fillStyle(0x07030f, 0.95); // el "agujero" (núcleo oscuro)
-    this.bhGfx.fillCircle(bh.x, bh.y, 17);
-    this.bhGfx.lineStyle(2.5, 0x7d5cff, 0.85); // disco de acreción (anillo)
-    this.bhGfx.strokeCircle(bh.x, bh.y, 17 + Math.sin(spin) * 1.5);
-    this.bhGfx.lineStyle(1, 0x9a7bff, 0.4); // brillo interno fino
-    this.bhGfx.strokeCircle(bh.x, bh.y, 11);
-    this.enemies.children.iterate((e) => {
-      if (!e || !e.active) return;
-      const dx = bh.x - e.x;
-      const dy = bh.y - e.y;
-      const d = Math.hypot(dx, dy) || 1;
-      if (d < st.radius) {
-        e.body.setVelocity((dx / d) * st.pull, (dy / d) * st.pull); // atracción
-        if (st.special.distort) e._distortUntil = this.timeSurvived + 200;
-        this.damageEnemy(e, st.dps * (dt / 1000), 'gravity');
+    for (let i = this._bhs.length - 1; i >= 0; i--) {
+      const bh = this._bhs[i];
+      if (this.timeSurvived >= bh.end) {
+        if (st.special.implosion)
+          this.enemies.children.iterate((e) => {
+            if (e && e.active && Math.hypot(e.x - bh.x, e.y - bh.y) < st.radius)
+              this.damageEnemy(e, st.dps * 1.5, 'gravity');
+          });
+        this._bhs.splice(i, 1);
+        continue;
       }
-    });
+      // Visual: núcleo oscuro + disco de acreción + borde tenue de la zona.
+      this.bhGfx.lineStyle(1, 0x5a3f8c, 0.18);
+      this.bhGfx.strokeCircle(bh.x, bh.y, st.radius);
+      this.bhGfx.fillStyle(0x07030f, 0.95);
+      this.bhGfx.fillCircle(bh.x, bh.y, 17);
+      this.bhGfx.lineStyle(2.5, 0x7d5cff, 0.85);
+      this.bhGfx.strokeCircle(bh.x, bh.y, 17 + Math.sin(spin) * 1.5);
+      this.bhGfx.lineStyle(1, 0x9a7bff, 0.4);
+      this.bhGfx.strokeCircle(bh.x, bh.y, 11);
+      this.enemies.children.iterate((e) => {
+        if (!e || !e.active) return;
+        const dx = bh.x - e.x;
+        const dy = bh.y - e.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d < st.radius) {
+          e.body.setVelocity((dx / d) * st.pull, (dy / d) * st.pull); // atracción
+          if (st.special.distort) e._distortUntil = this.timeSurvived + 200;
+          this.damageEnemy(e, st.dps * (dt / 1000), 'gravity');
+        }
+      });
+    }
   }
 
   rebuildOrbs() {
