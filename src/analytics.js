@@ -168,6 +168,9 @@ export const Analytics = {
       isNewUser: this.isNewUser(),
       nav: navigationType(),
       secsSinceLastVisit: secondsSinceLastVisit(),
+      // Tag a nivel PERSONA: permite filtrar "gente que jugó orbital-station"
+      // (y separar de Dungeon_Lord en el proyecto compartido).
+      $set: { game: GAME },
       ...(extra || {})
     });
   }
