@@ -172,7 +172,7 @@ export const WEAPONS = {
     type: 'kinetic',
     color: 0x9ad0ff,
     unlock: 'boss1',
-    base: { damage: 12, cooldownMs: 700, hp: 45, range: 165, respawnMs: 9000, speed: 150 },
+    base: { damage: 12, cooldownMs: 360, hp: 45, range: 165, respawnMs: 9000, speed: 150 },
     commons: [
       C('dmg', 3, '+Daño', '+Damage', '+18% daño de embestida.', '+18% ram damage.'),
       C('count', 2, '+Drone', '+Drone', '+1 drone. Daño −20%/stack.', '+1 drone. Damage −20%/stack.', true),

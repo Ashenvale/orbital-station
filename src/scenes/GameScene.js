@@ -1407,7 +1407,7 @@ export default class GameScene extends Phaser.Scene {
               d.ammo--;
               const ga = Math.atan2(tg.y - d.y, tg.x - d.x);
               const b = this.fireBullet(
-                ga, 420, st.damage, 0, st.special.phase ? 'energy' : 'kinetic'
+                ga, 700, st.damage, 0, st.special.phase ? 'energy' : 'kinetic'
               );
               b.setPosition(d.x, d.y);
               b.setTint(0x9ad0ff);
