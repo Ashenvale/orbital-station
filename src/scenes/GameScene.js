@@ -1475,6 +1475,29 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  // Invoca un agujero en el enemigo más cercano que NO esté ya cubierto por
+  // otro agujero activo (para repartirse a objetivos distintos).
+  spawnBlackhole() {
+    if (!this.up.blackhole.owned) return;
+    const st = this.ws('blackhole');
+    if (!this._bhs) this._bhs = [];
+    if (this._bhs.length >= st.count) return;
+    const range = this.scaledRange(MAX_RANGE);
+    let best = null;
+    let bd = range * range;
+    this.enemies.children.iterate((e) => {
+      if (!e || !e.active || e._untargetable) return;
+      for (const bh of this._bhs)
+        if (Math.hypot(e.x - bh.x, e.y - bh.y) < st.radius * 0.8) return; // ya cubierto
+      const d = (e.x - CX) ** 2 + (e.y - CY) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = e;
+      }
+    });
+    if (best) this._bhs.push({ x: best.x, y: best.y, end: this.timeSurvived + st.durationMs });
+  }
+
   // -- Agujero Negro (v0.7): atrae y daña en zona. La común +Agujero permite
   //    tener varios simultáneos.
   tickBlackhole(dt) {
@@ -1482,27 +1505,13 @@ export default class GameScene extends Phaser.Scene {
     if (!this.bhGfx) this.bhGfx = this.add.graphics().setDepth(5); // sin ADD
     if (!this._bhs) this._bhs = [];
     this.abilityTimers.bh = (this.abilityTimers.bh || 0) + dt;
-    // Cada cooldown invoca de golpe los que falten hasta st.count (en los
-    // enemigos más cercanos). Así "+Agujero" sí muestra varios a la vez,
-    // aunque cada uno dure menos que el cooldown.
+    // Cada cooldown invoca los que falten hasta st.count, pero ESCALONADOS en
+    // el tiempo y en enemigos DISTINTOS (no todos juntos sobre el mismo).
     const need = st.count - this._bhs.length;
     if (need > 0 && this.abilityTimers.bh >= st.cooldownMs) {
-      const range = this.scaledRange(MAX_RANGE);
-      const inR = [];
-      this.enemies.children.iterate((e) => {
-        if (!e || !e.active || e._untargetable) return;
-        const d = Math.hypot(e.x - CX, e.y - CY);
-        if (d <= range) inR.push({ e, d });
-      });
-      if (inR.length) {
-        this.abilityTimers.bh = 0;
-        inR.sort((a, b) => a.d - b.d);
-        for (let k = 0; k < need; k++) {
-          const t = inR[k % inR.length].e; // si hay menos enemigos, repite con offset
-          const ox = k < inR.length ? 0 : Phaser.Math.Between(-40, 40);
-          const oy = k < inR.length ? 0 : Phaser.Math.Between(-40, 40);
-          this._bhs.push({ x: t.x + ox, y: t.y + oy, end: this.timeSurvived + st.durationMs });
-        }
+      this.abilityTimers.bh = 0;
+      for (let k = 0; k < need; k++) {
+        this.time.delayedCall(k * 320, () => this.running && this.spawnBlackhole());
       }
     }
     this.bhGfx.clear();
