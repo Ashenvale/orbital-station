@@ -154,7 +154,7 @@ export const WEAPONS = {
       C('cap', 3, '+HP escudo', '+Shield HP', '+25% capacidad máx.', '+25% max capacity.'),
       C('regen', 3, '+Regen', '+Regen', '+20% velocidad de regen.', '+20% regen speed.'),
       C('resist', 3, '+Resistencia', '+Resistance', '+5% reducción de daño.', '+5% damage reduction.'),
-      C('recharge', 2, '+Recarga', '+Recharge', '+10% HP al iniciar nivel.', '+10% HP at level start.')
+      C('repair', 3, '+Reparación', '+Repair', 'Repara 4 HP/s del casco.', 'Repairs 4 hull HP/s.')
     ],
     specials: [
       S('absorb', 'Absorción', 'Absorb', 'Absorbe el golpe letal + 1s invul.', 'Absorbs a lethal hit + 1s invuln.'),
