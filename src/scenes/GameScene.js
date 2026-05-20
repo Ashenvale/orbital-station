@@ -154,6 +154,7 @@ export default class GameScene extends Phaser.Scene {
     this._glowPool = []; // glows de muerte / plasma
     this.orbs = [];
     this.drones = []; // dron(es) v0.7 (se reconstruyen por nivel)
+    this._droneRespawnAt = null; // respawn en escuadrón (todos juntos)
     this._bh = null; // agujero negro activo
     this.bhGfx = null;
 
@@ -1306,21 +1307,33 @@ export default class GameScene extends Phaser.Scene {
     while (this.drones.length > st.count) this.drones.pop().destroy();
     this.droneGfx.clear();
 
-    const M = 14;
-    for (const d of this.drones) {
-      d.maxHp = st.hp;
-      if (d.dead) {
-        if (now >= d.respawnAt) {
+    // Respawn EN ESCUADRÓN: si hay +1 drone, reaparecen JUNTOS y solo
+    // cuando TODOS están destruidos (no de a uno).
+    const anyAlive = this.drones.some((d) => !d.dead);
+    if (!anyAlive && this.drones.length) {
+      if (this._droneRespawnAt == null) this._droneRespawnAt = now + st.respawnMs;
+      else if (now >= this._droneRespawnAt) {
+        this._droneRespawnAt = null;
+        this.drones.forEach((d, i) => {
           d.dead = false;
-          d.hp = d.maxHp;
+          d.hp = st.hp;
+          d.maxHp = st.hp;
           d._dash = false;
           d.ammo = 5;
           d.setVisible(true).setActive(true);
-          d.x = CX + Phaser.Math.Between(-40, 40);
-          d.y = CY + Phaser.Math.Between(-40, 40);
-        }
-        continue;
+          const a = (i / this.drones.length) * Math.PI * 2;
+          d.x = CX + Math.cos(a) * 50;
+          d.y = CY + Math.sin(a) * 50;
+        });
       }
+    } else if (anyAlive) {
+      this._droneRespawnAt = null;
+    }
+
+    const M = 14;
+    for (const d of this.drones) {
+      d.maxHp = st.hp;
+      if (d.dead) continue; // muerto: espera a que mueran todos para volver
 
       const DASH_SP = st.speed * 1.7;
       const OVERSHOOT = 55;
@@ -1422,7 +1435,6 @@ export default class GameScene extends Phaser.Scene {
           this.spawnDeathFx(d.x, d.y, 0x9ad0ff);
         }
         d.dead = true;
-        d.respawnAt = now + st.respawnMs;
         d.setVisible(false).setActive(false);
         continue;
       }
